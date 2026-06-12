@@ -52,18 +52,18 @@
 
     <div class="direction-buttons">
       <div class="dir-row">
-        <button class="dir-btn" @touchstart.prevent="handleDirStart('up')" @touchend.prevent="handleDirEnd('up')">
+        <button class="dir-btn" @click="handleDirClick('up')" @touchstart.prevent="handleDirStart('up')" @touchend.prevent="handleDirEnd('up')">
           <el-icon :size="28"><ArrowUp /></el-icon>
         </button>
       </div>
       <div class="dir-row">
-        <button class="dir-btn" @touchstart.prevent="handleDirStart('left')" @touchend.prevent="handleDirEnd('left')">
+        <button class="dir-btn" @click="handleDirClick('left')" @touchstart.prevent="handleDirStart('left')" @touchend.prevent="handleDirEnd('left')">
           <el-icon :size="28"><ArrowLeft /></el-icon>
         </button>
-        <button class="dir-btn" @touchstart.prevent="handleDirStart('down')" @touchend.prevent="handleDirEnd('down')">
+        <button class="dir-btn" @click="handleDirClick('down')" @touchstart.prevent="handleDirStart('down')" @touchend.prevent="handleDirEnd('down')">
           <el-icon :size="28"><ArrowDown /></el-icon>
         </button>
-        <button class="dir-btn" @touchstart.prevent="handleDirStart('right')" @touchend.prevent="handleDirEnd('right')">
+        <button class="dir-btn" @click="handleDirClick('right')" @touchstart.prevent="handleDirStart('right')" @touchend.prevent="handleDirEnd('right')">
           <el-icon :size="28"><ArrowRight /></el-icon>
         </button>
       </div>
@@ -82,6 +82,7 @@ const canvasRef = ref(null)
 
 const submitScore = inject('submitScore')
 const highScores = inject('highScores')
+const loadHighScores = inject('loadHighScores')
 
 const GRID_SIZE = 20
 const INITIAL_SPEED = 150
@@ -153,7 +154,9 @@ function drawRoundedRect(x, y, width, height, radius) {
 function draw() {
   if (!ctx) return
 
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'
+  ctx.clearRect(0, 0, canvasSize.value, canvasSize.value)
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)'
   drawRoundedRect(0, 0, canvasSize.value, canvasSize.value, 12)
   ctx.fill()
 
@@ -353,6 +356,10 @@ function handleDirStart(dir) {
 function handleDirEnd(dir) {
 }
 
+function handleDirClick(dir) {
+  changeDirection(dir)
+}
+
 function toggleGame() {
   if (gameOver.value) {
     resetGame()
@@ -404,6 +411,10 @@ async function handleGameOver() {
 
 function goBack() {
   stopGameLoop()
+  if (!gameOver.value && score.value > 0 && !scoreSubmitted) {
+    scoreSubmitted = true
+    submitScore('snake', score.value)
+  }
   router.push({ path: '/home' })
 }
 
@@ -455,6 +466,7 @@ function resizeCanvas() {
 }
 
 onMounted(() => {
+  loadHighScores()
   nextTick(() => {
     resizeCanvas()
     initGame()
@@ -617,22 +629,24 @@ onUnmounted(() => {
 }
 
 .direction-buttons {
-  margin-top: 20px;
+  margin-top: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding-bottom: 20px;
+  gap: 14px;
+  padding-bottom: calc(40px + env(safe-area-inset-bottom));
+  padding-left: 20px;
+  padding-right: 20px;
 }
 
 .dir-row {
   display: flex;
-  gap: 10px;
+  gap: 18px;
 }
 
 .dir-btn {
-  width: 68px;
-  height: 68px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.25);
   border: 2px solid rgba(255, 255, 255, 0.3);
@@ -645,6 +659,8 @@ onUnmounted(() => {
   transition: all 0.1s ease;
   -webkit-user-select: none;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .dir-btn:active {

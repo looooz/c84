@@ -70,6 +70,7 @@ const canvasRef = ref(null)
 
 const submitScore = inject('submitScore')
 const highScores = inject('highScores')
+const loadHighScores = inject('loadHighScores')
 
 const GRID_SIZE = 4
 const CELL_PADDING = 8
@@ -86,6 +87,7 @@ let cellSize = 0
 let swipeHandler = null
 let isAnimating = false
 let animationQueue = []
+let scoreSubmitted = false
 
 const cellColors = {
   0: 'rgba(238, 228, 218, 0.35)',
@@ -533,7 +535,8 @@ function checkGameOver() {
 }
 
 async function handleGameOver() {
-  if (score.value > 0) {
+  if (!scoreSubmitted && score.value > 0) {
+    scoreSubmitted = true
     await submitScore('2048', score.value)
   }
 }
@@ -541,6 +544,7 @@ async function handleGameOver() {
 function newGame() {
   score.value = 0
   gameOver.value = false
+  scoreSubmitted = false
   initGrid()
   animationQueue = []
   addRandomTile()
@@ -549,6 +553,10 @@ function newGame() {
 }
 
 function goBack() {
+  if (!gameOver.value && score.value > 0 && !scoreSubmitted) {
+    scoreSubmitted = true
+    submitScore('2048', score.value)
+  }
   router.push({ path: '/home' })
 }
 
@@ -585,6 +593,7 @@ function resizeCanvas() {
 }
 
 onMounted(() => {
+  loadHighScores()
   nextTick(() => {
     resizeCanvas()
     newGame()

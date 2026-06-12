@@ -27,23 +27,45 @@ const highScores = reactive({
   'snake': 0
 })
 
+let isLoadingScores = false
+let loadScoresPromise = null
+
 async function loadHighScores() {
-  try {
-    const scores = await getScores()
-    Object.keys(scores).forEach(key => {
-      highScores[key] = scores[key].score
-    })
-  } catch (e) {
-    console.error('加载最高分失败:', e)
+  if (isLoadingScores && loadScoresPromise) {
+    return loadScoresPromise
   }
+  isLoadingScores = true
+  loadScoresPromise = (async () => {
+    try {
+      const scores = await getScores()
+      Object.keys(scores).forEach(key => {
+        const newScore = scores[key].score
+        if (typeof newScore === 'number' && newScore >= 0) {
+          if (newScore >= (highScores[key] || 0)) {
+            highScores[key] = newScore
+          }
+        }
+      })
+    } catch (e) {
+      console.error('加载最高分失败:', e)
+    } finally {
+      isLoadingScores = false
+      loadScoresPromise = null
+    }
+  })()
+  return loadScoresPromise
 }
 
 async function submitScore(gameName, score, playerName = '玩家') {
   try {
     const result = await updateScore(gameName, score, playerName)
-    if (result.isNewRecord) {
-      highScores[gameName] = score
-      showCelebrate(score, gameName)
+    if (result && typeof result.score === 'number') {
+      if (result.score >= (highScores[gameName] || 0)) {
+        highScores[gameName] = result.score
+      }
+      if (result.isNewRecord) {
+        showCelebrate(result.score, gameName)
+      }
     }
     return result
   } catch (e) {
