@@ -31,7 +31,7 @@ function initDatabase() {
       console.error('创建表失败:', err.message);
     } else {
       console.log('high_scores 表已就绪');
-      const games = ['2048', 'snake'];
+      const games = ['2048', 'snake', 'tetris', 'bigfish'];
       games.forEach(game => {
         db.get('SELECT * FROM high_scores WHERE game_name = ?', [game], (err, row) => {
           if (!row) {

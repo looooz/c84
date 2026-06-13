@@ -94,6 +94,22 @@ const games = [
     icon: '🐍',
     iconBg: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
     route: '/game/snake'
+  },
+  {
+    id: 3,
+    key: 'tetris',
+    name: '俄罗斯方块',
+    icon: '🧱',
+    iconBg: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+    route: '/game/tetris'
+  },
+  {
+    id: 4,
+    key: 'bigfish',
+    name: '大鱼吃小鱼',
+    icon: '🐟',
+    iconBg: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+    route: '/game/bigfish'
   }
 ]
 

@@ -28,6 +28,18 @@ const routes = [
     name: 'GameSnake',
     component: () => import('../views/GameSnake.vue'),
     meta: { title: '贪吃蛇' }
+  },
+  {
+    path: '/game/tetris',
+    name: 'GameTetris',
+    component: () => import('../views/GameTetris.vue'),
+    meta: { title: '俄罗斯方块' }
+  },
+  {
+    path: '/game/bigfish',
+    name: 'GameBigFish',
+    component: () => import('../views/GameBigFish.vue'),
+    meta: { title: '大鱼吃小鱼' }
   }
 ]
 

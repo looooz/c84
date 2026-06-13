@@ -24,7 +24,9 @@ const celebrateGameName = ref('')
 
 const highScores = reactive({
   '2048': 0,
-  'snake': 0
+  'snake': 0,
+  'tetris': 0,
+  'bigfish': 0
 })
 
 let isLoadingScores = false
