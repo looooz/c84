@@ -32,7 +32,7 @@
             </div>
             <div class="stat-info">
               <div class="stat-name">{{ game.name }}</div>
-              <div class="stat-score">{{ highScores[game.key] || 0 }}</div>
+              <div class="stat-score">{{ game.highScore }}</div>
             </div>
             <el-icon :size="20" class="stat-arrow"><ArrowRight /></el-icon>
           </div>
@@ -79,15 +79,21 @@ const highScores = inject('highScores')
 const loadHighScores = inject('loadHighScores')
 const refreshHighScores = inject('refreshHighScores')
 
-const totalScore = computed(() => {
-  let total = 0
-  games.forEach(g => {
-    total += (highScores && typeof highScores[g.key] === 'number') ? highScores[g.key] : 0
-  })
-  return total
+const ALL_GAMES_KEY = ['2048', 'snake', 'tetris', 'bigfish', 'blade', 'tank']
+
+function getHighScore(key) {
+  if (typeof highScores !== 'object' || highScores === null) return 0
+  const val = highScores[key]
+  return typeof val === 'number' ? val : 0
+}
+
+const gameScoreMap = computed(() => {
+  const map = {}
+  ALL_GAMES_KEY.forEach(k => { map[k] = getHighScore(k) })
+  return map
 })
 
-const games = [
+const GAMES_DEF = [
   {
     key: '2048',
     name: '2048',
@@ -132,6 +138,21 @@ const games = [
   }
 ]
 
+const games = computed(() => {
+  return GAMES_DEF.map(g => ({
+    ...g,
+    highScore: gameScoreMap.value[g.key]
+  }))
+})
+
+const totalScore = computed(() => {
+  let total = 0
+  ALL_GAMES_KEY.forEach(k => {
+    total += gameScoreMap.value[k] || 0
+  })
+  return total
+})
+
 let swipeHandler = null
 
 function goToGame(route) {
@@ -148,7 +169,8 @@ watch(
     if (newPath === '/mine') {
       refreshHighScores()
     }
-  }
+  },
+  { immediate: false }
 )
 
 onMounted(() => {

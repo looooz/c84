@@ -23,7 +23,7 @@
             :name="game.name"
             :icon="game.icon"
             :icon-bg="game.iconBg"
-            :high-score="highScores[game.key] || 0"
+            :high-score="game.highScore"
             :route="game.route"
           />
         </div>
@@ -65,7 +65,7 @@
 </template>
 
 <script setup>
-import { ref, inject, onMounted, onUnmounted, watch } from 'vue'
+import { ref, inject, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import GameCard from '../components/GameCard.vue'
 import BottomNav from '../components/BottomNav.vue'
@@ -80,14 +80,29 @@ const highScores = inject('highScores')
 const loadHighScores = inject('loadHighScores')
 const refreshHighScores = inject('refreshHighScores')
 
-const games = [
+const ALL_GAMES_KEY = ['2048', 'snake', 'tetris', 'bigfish', 'blade', 'tank']
+
+function getHighScore(key) {
+  if (typeof highScores !== 'object' || highScores === null) return 0
+  const val = highScores[key]
+  return typeof val === 'number' ? val : 0
+}
+
+const gameScoreMap = computed(() => {
+  const map = {}
+  ALL_GAMES_KEY.forEach(k => { map[k] = getHighScore(k) })
+  return map
+})
+
+const games = computed(() => [
   {
     id: 1,
     key: '2048',
     name: '2048',
     icon: '2️⃣',
     iconBg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-    route: '/game/2048'
+    route: '/game/2048',
+    highScore: gameScoreMap.value['2048']
   },
   {
     id: 2,
@@ -95,7 +110,8 @@ const games = [
     name: '贪吃蛇',
     icon: '🐍',
     iconBg: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-    route: '/game/snake'
+    route: '/game/snake',
+    highScore: gameScoreMap.value['snake']
   },
   {
     id: 3,
@@ -103,7 +119,8 @@ const games = [
     name: '俄罗斯方块',
     icon: '🧱',
     iconBg: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-    route: '/game/tetris'
+    route: '/game/tetris',
+    highScore: gameScoreMap.value['tetris']
   },
   {
     id: 4,
@@ -111,7 +128,8 @@ const games = [
     name: '大鱼吃小鱼',
     icon: '🐟',
     iconBg: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-    route: '/game/bigfish'
+    route: '/game/bigfish',
+    highScore: gameScoreMap.value['bigfish']
   },
   {
     id: 5,
@@ -119,7 +137,8 @@ const games = [
     name: '转刀割草',
     icon: '⚔️',
     iconBg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    route: '/game/blade'
+    route: '/game/blade',
+    highScore: gameScoreMap.value['blade']
   },
   {
     id: 6,
@@ -127,9 +146,10 @@ const games = [
     name: '坦克大战',
     icon: '🎮',
     iconBg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-    route: '/game/tank'
+    route: '/game/tank',
+    highScore: gameScoreMap.value['tank']
   }
-]
+])
 
 let swipeHandler = null
 
@@ -143,7 +163,8 @@ watch(
     if (newPath === '/home') {
       refreshHighScores()
     }
-  }
+  },
+  { immediate: false }
 )
 
 onMounted(() => {
