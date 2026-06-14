@@ -223,6 +223,11 @@ let playerStartY = 0
 let screenShake = 0
 let invincibleTimer = 0
 
+let mapWidth = 1080
+let mapHeight = 1560
+let cameraX = 0
+let cameraY = 0
+
 const TILE_SIZE = 40
 const MAP_COLS = 12
 const MAP_ROWS = 15
@@ -269,10 +274,13 @@ function initLevel() {
   powerupSpawnTimer = 0
   invincibleTimer = 0
 
+  mapWidth = canvasWidth.value * 3
+  mapHeight = canvasHeight.value * 3
+
   generateMap()
 
-  player.x = canvasWidth.value / 2
-  player.y = canvasHeight.value / 2
+  player.x = mapWidth / 2
+  player.y = mapHeight / 2
   player.radius = 20
 
   const safe = findSafeSpawn(player.x, player.y)
@@ -283,14 +291,21 @@ function initLevel() {
   updateBlades()
 }
 
+function updateCamera() {
+  cameraX = player.x - canvasWidth.value / 2
+  cameraY = player.y - canvasHeight.value / 2
+  cameraX = Math.max(0, Math.min(mapWidth - canvasWidth.value, cameraX))
+  cameraY = Math.max(0, Math.min(mapHeight - canvasHeight.value, cameraY))
+}
+
 function generateMap() {
   obstacles = []
   chests = []
   grassPatches = []
 
-  for (let i = 0; i < 6 + level.value; i++) {
-    const x = 30 + Math.random() * (canvasWidth.value - 60)
-    const y = 60 + Math.random() * (canvasHeight.value - 120)
+  for (let i = 0; i < 15 + level.value * 3; i++) {
+    const x = 30 + Math.random() * (mapWidth - 60)
+    const y = 60 + Math.random() * (mapHeight - 120)
     const type = Math.random() > 0.5 ? 'rock' : 'tree'
     const radius = type === 'rock' ? 18 + Math.random() * 10 : 20 + Math.random() * 8
 
@@ -299,12 +314,12 @@ function generateMap() {
     }
   }
 
-  for (let i = 0; i < 2 + Math.floor(level.value / 2); i++) {
+  for (let i = 0; i < 4 + level.value; i++) {
     let x, y
     let attempts = 0
     do {
-      x = 40 + Math.random() * (canvasWidth.value - 80)
-      y = 80 + Math.random() * (canvasHeight.value - 160)
+      x = 40 + Math.random() * (mapWidth - 80)
+      y = 80 + Math.random() * (mapHeight - 160)
       attempts++
     } while (isNearObstacle(x, y, 50) && attempts < 20)
 
@@ -317,10 +332,10 @@ function generateMap() {
     })
   }
 
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < 40; i++) {
     grassPatches.push({
-      x: Math.random() * canvasWidth.value,
-      y: Math.random() * canvasHeight.value,
+      x: Math.random() * mapWidth,
+      y: Math.random() * mapHeight,
       size: 15 + Math.random() * 25,
       type: Math.floor(Math.random() * 3)
     })
@@ -328,8 +343,8 @@ function generateMap() {
 }
 
 function distanceToCenter(x, y) {
-  const cx = canvasWidth.value / 2
-  const cy = canvasHeight.value / 2
+  const cx = mapWidth / 2
+  const cy = mapHeight / 2
   return Math.sqrt((x - cx) ** 2 + (y - cy) ** 2)
 }
 
@@ -352,8 +367,8 @@ function findSafeSpawn(nearX, nearY) {
     const dist = 30 + Math.random() * 50
     x = nearX + Math.cos(angle) * dist
     y = nearY + Math.sin(angle) * dist
-    x = Math.max(30, Math.min(canvasWidth.value - 30, x))
-    y = Math.max(50, Math.min(canvasHeight.value - 50, y))
+    x = Math.max(30, Math.min(mapWidth - 30, x))
+    y = Math.max(50, Math.min(mapHeight - 50, y))
     attempts++
   }
 
@@ -381,11 +396,14 @@ function spawnEnemy() {
   let x, y
 
   switch (side) {
-    case 0: x = Math.random() * canvasWidth.value; y = -20; break
-    case 1: x = canvasWidth.value + 20; y = Math.random() * canvasHeight.value; break
-    case 2: x = Math.random() * canvasWidth.value; y = canvasHeight.value + 20; break
-    case 3: x = -20; y = Math.random() * canvasHeight.value; break
+    case 0: x = cameraX + Math.random() * canvasWidth.value; y = cameraY - 40; break
+    case 1: x = cameraX + canvasWidth.value + 40; y = cameraY + Math.random() * canvasHeight.value; break
+    case 2: x = cameraX + Math.random() * canvasWidth.value; y = cameraY + canvasHeight.value + 40; break
+    case 3: x = cameraX - 40; y = cameraY + Math.random() * canvasHeight.value; break
   }
+
+  x = Math.max(0, Math.min(mapWidth, x))
+  y = Math.max(0, Math.min(mapHeight, y))
 
   const types = getEnemyTypesForLevel()
   const type = types[Math.floor(Math.random() * types.length)]
@@ -456,8 +474,8 @@ function spawnBoss() {
   bossHp = bossMaxHp
 
   boss = {
-    x: canvasWidth.value / 2,
-    y: -60,
+    x: cameraX + canvasWidth.value / 2,
+    y: cameraY - 60,
     radius: 45,
     speed: 0.8,
     type: 'boss',
@@ -872,6 +890,9 @@ function draw() {
     if (screenShake < 0.5) screenShake = 0
   }
 
+  updateCamera()
+  ctx.translate(-cameraX, -cameraY)
+
   drawBackground()
   drawGrass()
   drawObstacles()
@@ -884,28 +905,34 @@ function draw() {
   drawPlayer()
   drawDamageTexts()
 
+  ctx.strokeStyle = 'rgba(255, 100, 100, 0.3)'
+  ctx.lineWidth = 3
+  ctx.strokeRect(0, 0, mapWidth, mapHeight)
+
   ctx.restore()
 }
 
 function drawBackground() {
-  const gradient = ctx.createLinearGradient(0, 0, 0, canvasHeight.value)
+  const sx = Math.floor(cameraX / TILE_SIZE) * TILE_SIZE
+  const sy = Math.floor(cameraY / TILE_SIZE) * TILE_SIZE
+  const gradient = ctx.createLinearGradient(sx, sy, sx, sy + canvasHeight.value)
   gradient.addColorStop(0, '#1a4d2e')
   gradient.addColorStop(1, '#0d2818')
   ctx.fillStyle = gradient
-  ctx.fillRect(0, 0, canvasWidth.value, canvasHeight.value)
+  ctx.fillRect(sx, sy, canvasWidth.value, canvasHeight.value)
 
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)'
   ctx.lineWidth = 1
-  for (let x = 0; x < canvasWidth.value; x += TILE_SIZE) {
+  for (let x = sx; x < sx + canvasWidth.value + TILE_SIZE; x += TILE_SIZE) {
     ctx.beginPath()
-    ctx.moveTo(x, 0)
-    ctx.lineTo(x, canvasHeight.value)
+    ctx.moveTo(x, sy)
+    ctx.lineTo(x, sy + canvasHeight.value)
     ctx.stroke()
   }
-  for (let y = 0; y < canvasHeight.value; y += TILE_SIZE) {
+  for (let y = sy; y < sy + canvasHeight.value + TILE_SIZE; y += TILE_SIZE) {
     ctx.beginPath()
-    ctx.moveTo(0, y)
-    ctx.lineTo(canvasWidth.value, y)
+    ctx.moveTo(sx, y)
+    ctx.lineTo(sx + canvasWidth.value, y)
     ctx.stroke()
   }
 }
@@ -1273,6 +1300,7 @@ function drawBoss() {
 function gameLoop() {
   if (!isRunning.value || gameOver.value || showLevelComplete.value) return
 
+  updateCamera()
   bladeAngle += bladeSpeed.value
   updateBlades()
 
@@ -1370,8 +1398,8 @@ function getCanvasPos(e) {
   }
 
   return {
-    x: (clientX - rect.left) * scaleX,
-    y: (clientY - rect.top) * scaleY
+    x: (clientX - rect.left) * scaleX + cameraX,
+    y: (clientY - rect.top) * scaleY + cameraY
   }
 }
 
@@ -1420,8 +1448,8 @@ function movePlayer(pos) {
   let newX = playerStartX + dx * playerSpeed.value
   let newY = playerStartY + dy * playerSpeed.value
 
-  newX = Math.max(player.radius, Math.min(canvasWidth.value - player.radius, newX))
-  newY = Math.max(player.radius, Math.min(canvasHeight.value - player.radius, newY))
+  newX = Math.max(player.radius, Math.min(mapWidth - player.radius, newX))
+  newY = Math.max(player.radius, Math.min(mapHeight - player.radius, newY))
 
   for (const obs of obstacles) {
     const odx = newX - obs.x

@@ -83,15 +83,28 @@ export class Powerup {
   }
 }
 
-export function createRandomPowerup() {
+export function createRandomPowerup(mapManager = null) {
   const types = Object.values(POWERUP_TYPE)
   const type = types[Math.floor(Math.random() * types.length)]
 
   const padding = TILE_SIZE * 2
   const mapW = MAP_COLS * TILE_SIZE
   const mapH = MAP_ROWS * TILE_SIZE
-  const x = padding + Math.random() * (mapW - padding * 2 - TILE_SIZE)
-  const y = padding + Math.random() * (mapH - padding * 2 - TILE_SIZE)
+  const powerupSize = TILE_SIZE - 4
+
+  let x, y
+  let attempts = 0
+  const maxAttempts = 50
+
+  do {
+    x = padding + Math.random() * (mapW - padding * 2 - TILE_SIZE)
+    y = padding + Math.random() * (mapH - padding * 2 - TILE_SIZE)
+    attempts++
+  } while (
+    attempts < maxAttempts &&
+    mapManager &&
+    mapManager.checkCollision(x, y, powerupSize, powerupSize)
+  )
 
   return new Powerup(type, x, y)
 }

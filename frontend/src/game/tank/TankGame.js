@@ -208,7 +208,7 @@ export class TankGame {
     if (this.powerupSpawnTimer >= 1200) {
       this.powerupSpawnTimer = 0
       if (this.powerups.length < 2) {
-        this.powerups.push(createRandomPowerup())
+        this.powerups.push(createRandomPowerup(this.mapManager))
       }
     }
 
@@ -314,7 +314,7 @@ export class TankGame {
       }
     }
 
-    this.enemies = this.enemies.filter(e => e.alive || e.explosionAdded !== true)
+    this.enemies = this.enemies.filter(e => e.alive)
   }
 
   updateBullets() {
@@ -377,9 +377,31 @@ export class TankGame {
             this.score += tank.score
             this.enemiesKilled++
             if (Math.random() < 0.15) {
-              const p = createRandomPowerup()
+              const p = createRandomPowerup(this.mapManager)
               p.x = tank.x
               p.y = tank.y
+              if (this.mapManager.checkCollision(p.x, p.y, p.width, p.height)) {
+                let placed = false
+                for (let d = 1; d <= 5; d++) {
+                  const offsets = [
+                    { dx: d * TILE_SIZE, dy: 0 },
+                    { dx: -d * TILE_SIZE, dy: 0 },
+                    { dx: 0, dy: d * TILE_SIZE },
+                    { dx: 0, dy: -d * TILE_SIZE }
+                  ]
+                  for (const off of offsets) {
+                    const nx = tank.x + off.dx
+                    const ny = tank.y + off.dy
+                    if (!this.mapManager.checkCollision(nx, ny, p.width, p.height)) {
+                      p.x = nx
+                      p.y = ny
+                      placed = true
+                      break
+                    }
+                  }
+                  if (placed) break
+                }
+              }
               this.powerups.push(p)
             }
             this.notifyStateChange()
