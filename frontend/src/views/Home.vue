@@ -118,6 +118,14 @@ const games = [
     icon: '⚔️',
     iconBg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     route: '/game/blade'
+  },
+  {
+    id: 6,
+    key: 'tank',
+    name: '坦克大战',
+    icon: '🎮',
+    iconBg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+    route: '/game/tank'
   }
 ]
 

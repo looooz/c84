@@ -26,7 +26,9 @@ const highScores = reactive({
   '2048': 0,
   'snake': 0,
   'tetris': 0,
-  'bigfish': 0
+  'bigfish': 0,
+  'blade': 0,
+  'tank': 0
 })
 
 let isLoadingScores = false
