@@ -537,11 +537,15 @@ async function handleGameOver() {
   }
 }
 
-function goBack() {
+async function goBack() {
   stopGameLoop()
   if (!gameOver.value && score.value > 0 && !scoreSubmitted) {
     scoreSubmitted = true
-    submitScore('tetris', score.value)
+    try {
+      await submitScore('tetris', score.value)
+    } catch (e) {
+      console.error('提交分数失败:', e)
+    }
   }
   router.push({ path: '/home' })
 }

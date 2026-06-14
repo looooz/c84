@@ -546,7 +546,7 @@ function resetGame(){stopGame();initGame()}
 
 async function handleGameOver(){
   if(!scoreSubmitted&&score.value>0){scoreSubmitted=true;await submitScore('bigfish',score.value)}}
-function goBack(){stopGame();if(!gameOver.value&&score.value>0&&!scoreSubmitted){scoreSubmitted=true;submitScore('bigfish',score.value)}
+async function goBack(){stopGame();if(!gameOver.value&&score.value>0&&!scoreSubmitted){scoreSubmitted=true;try{await submitScore('bigfish',score.value)}catch(e){console.error('提交分数失败:',e)}}
   router.push({path:'/home'})}
 
 function getCanvasPos(cx,cy){const r=canvasRef.value.getBoundingClientRect()

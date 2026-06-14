@@ -290,11 +290,15 @@ async function endGame() {
   }
 }
 
-function goBack() {
+async function goBack() {
   cancelAnimationFrame(animationId)
   if (!gameOver.value && score.value > 0 && !scoreSubmitted) {
     scoreSubmitted = true
-    submitScore('tank', score.value)
+    try {
+      await submitScore('tank', score.value)
+    } catch (e) {
+      console.error('提交分数失败:', e)
+    }
   }
   router.push({ path: '/home' })
 }

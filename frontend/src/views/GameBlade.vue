@@ -2181,11 +2181,15 @@ async function handleGameOver() {
   }
 }
 
-function goBack() {
+async function goBack() {
   pauseGame()
   if (!gameOver.value && score.value > 0 && !scoreSubmitted) {
     scoreSubmitted = true
-    submitScore('blade', score.value)
+    try {
+      await submitScore('blade', score.value)
+    } catch (e) {
+      console.error('提交分数失败:', e)
+    }
   }
   router.push({ path: '/home' })
 }

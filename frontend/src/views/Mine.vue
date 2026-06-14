@@ -9,6 +9,10 @@
           <div class="user-name">玩家</div>
           <div class="user-desc">休闲游戏爱好者</div>
         </div>
+        <div class="user-total-score">
+          <div class="total-label">总分</div>
+          <div class="total-value">{{ totalScore }}</div>
+        </div>
       </div>
 
       <div class="stats-section">
@@ -62,16 +66,26 @@
 </template>
 
 <script setup>
-import { ref, inject, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, inject, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import BottomNav from '../components/BottomNav.vue'
 import { useSwipe } from '../utils/touch'
 
 const router = useRouter()
+const route = useRoute()
 const pageRef = ref(null)
 
 const highScores = inject('highScores')
 const loadHighScores = inject('loadHighScores')
+const refreshHighScores = inject('refreshHighScores')
+
+const totalScore = computed(() => {
+  let total = 0
+  games.forEach(g => {
+    total += (highScores && typeof highScores[g.key] === 'number') ? highScores[g.key] : 0
+  })
+  return total
+})
 
 const games = [
   {
@@ -125,11 +139,20 @@ function goToGame(route) {
 }
 
 async function refreshScores() {
-  await loadHighScores()
+  await refreshHighScores()
 }
 
+watch(
+  () => route.path,
+  (newPath) => {
+    if (newPath === '/mine') {
+      refreshHighScores()
+    }
+  }
+)
+
 onMounted(() => {
-  loadHighScores()
+  refreshHighScores()
   swipeHandler = useSwipe(pageRef.value, {
     onSwipeRight: () => {
       router.push({ path: '/home' })
@@ -181,6 +204,28 @@ onUnmounted(() => {
 .user-desc {
   font-size: 14px;
   opacity: 0.8;
+}
+
+.user-total-score {
+  margin-left: auto;
+  text-align: right;
+  color: white;
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.total-label {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-bottom: 2px;
+}
+
+.total-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: #fbbf24;
 }
 
 .stats-section {

@@ -552,10 +552,14 @@ function newGame() {
   updateAnimations()
 }
 
-function goBack() {
+async function goBack() {
   if (!gameOver.value && score.value > 0 && !scoreSubmitted) {
     scoreSubmitted = true
-    submitScore('2048', score.value)
+    try {
+      await submitScore('2048', score.value)
+    } catch (e) {
+      console.error('提交分数失败:', e)
+    }
   }
   router.push({ path: '/home' })
 }

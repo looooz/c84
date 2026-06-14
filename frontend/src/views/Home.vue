@@ -65,18 +65,20 @@
 </template>
 
 <script setup>
-import { ref, inject, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, inject, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import GameCard from '../components/GameCard.vue'
 import BottomNav from '../components/BottomNav.vue'
 import { useSwipe } from '../utils/touch'
 
 const router = useRouter()
+const route = useRoute()
 const pageRef = ref(null)
 const gridRef = ref(null)
 
 const highScores = inject('highScores')
 const loadHighScores = inject('loadHighScores')
+const refreshHighScores = inject('refreshHighScores')
 
 const games = [
   {
@@ -135,8 +137,17 @@ function goToMine() {
   router.push({ path: '/mine' })
 }
 
+watch(
+  () => route.path,
+  (newPath) => {
+    if (newPath === '/home') {
+      refreshHighScores()
+    }
+  }
+)
+
 onMounted(() => {
-  loadHighScores()
+  refreshHighScores()
   swipeHandler = useSwipe(pageRef.value, {
     onSwipeLeft: () => {
       router.push({ path: '/mine' })

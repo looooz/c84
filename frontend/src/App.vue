@@ -34,6 +34,8 @@ const highScores = reactive({
 let isLoadingScores = false
 let loadScoresPromise = null
 
+const ALL_GAMES = ['2048', 'snake', 'tetris', 'bigfish', 'blade', 'tank']
+
 async function loadHighScores() {
   if (isLoadingScores && loadScoresPromise) {
     return loadScoresPromise
@@ -42,22 +44,35 @@ async function loadHighScores() {
   loadScoresPromise = (async () => {
     try {
       const scores = await getScores()
-      Object.keys(scores).forEach(key => {
-        const newScore = scores[key].score
-        if (typeof newScore === 'number' && newScore >= 0) {
-          if (newScore >= (highScores[key] || 0)) {
+      ALL_GAMES.forEach(key => {
+        if (scores && scores[key] && typeof scores[key].score === 'number') {
+          const newScore = scores[key].score
+          if (newScore >= 0 && newScore >= (highScores[key] || 0)) {
             highScores[key] = newScore
           }
+        } else if (typeof highScores[key] !== 'number') {
+          highScores[key] = 0
         }
       })
     } catch (e) {
       console.error('加载最高分失败:', e)
+      ALL_GAMES.forEach(key => {
+        if (typeof highScores[key] !== 'number') {
+          highScores[key] = 0
+        }
+      })
     } finally {
       isLoadingScores = false
       loadScoresPromise = null
     }
   })()
   return loadScoresPromise
+}
+
+async function refreshHighScores() {
+  isLoadingScores = false
+  loadScoresPromise = null
+  return loadHighScores()
 }
 
 async function submitScore(gameName, score, playerName = '玩家') {
@@ -118,6 +133,7 @@ function handleResize() {
 
 provide('highScores', highScores)
 provide('loadHighScores', loadHighScores)
+provide('refreshHighScores', refreshHighScores)
 provide('submitScore', submitScore)
 provide('showCelebrate', showCelebrate)
 
