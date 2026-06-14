@@ -10,18 +10,57 @@
       </button>
     </div>
 
-    <div class="score-row">
-      <div class="score-display">
-        <div class="score-label">当前分数</div>
-        <div class="score-value">{{ score }}</div>
+    <div class="status-bar">
+      <div class="status-item">
+        <span class="status-label">第</span>
+        <span class="status-value level">{{ level }}</span>
+        <span class="status-label">关</span>
       </div>
-      <div class="score-display">
-        <div class="score-label">最高分</div>
-        <div class="score-value">{{ highScore }}</div>
+      <div class="status-item wave-item">
+        <span class="status-label">波次</span>
+        <span class="status-value">{{ currentWave }}/{{ totalWaves }}</span>
       </div>
-      <div class="score-display">
-        <div class="score-label">刀数</div>
-        <div class="score-value">{{ bladeCount }}</div>
+      <div class="status-item">
+        <span class="status-label">得分</span>
+        <span class="status-value">{{ score }}</span>
+      </div>
+    </div>
+
+    <div class="mission-bar">
+      <div class="mission-text">📋 {{ missionText }}</div>
+      <div class="mission-progress-wrap">
+        <div class="mission-progress" :style="{ width: missionProgress + '%' }"></div>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-item">
+        <div class="stat-icon">⚔️</div>
+        <div class="stat-info">
+          <div class="stat-label">刀数</div>
+          <div class="stat-value">{{ bladeCount }}</div>
+        </div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-icon">💨</div>
+        <div class="stat-info">
+          <div class="stat-label">转速</div>
+          <div class="stat-value">{{ Math.round(bladeSpeed * 100) }}</div>
+        </div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-icon">📏</div>
+        <div class="stat-info">
+          <div class="stat-label">范围</div>
+          <div class="stat-value">{{ Math.round(bladeRadius + bladeLength) }}</div>
+        </div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-icon">❤️</div>
+        <div class="stat-info">
+          <div class="stat-label">生命</div>
+          <div class="stat-value">{{ playerHp }}</div>
+        </div>
       </div>
     </div>
 
@@ -39,32 +78,57 @@
       ></canvas>
     </div>
 
-    <div class="game-status" v-if="gameOver">
-      <div class="status-text">游戏结束！</div>
-      <div class="status-score">最终得分: {{ score }}</div>
+    <div class="game-overlay" v-if="showLevelComplete">
+      <div class="overlay-content">
+        <div class="overlay-title">🎉 关卡完成！</div>
+        <div class="overlay-score">得分：{{ score }}</div>
+        <div class="overlay-bonus" v-if="levelBonus">关卡奖励：+{{ levelBonus }}分</div>
+        <button class="overlay-btn" @click="nextLevel">下一关</button>
+      </div>
     </div>
 
-    <div class="control-panel">
-      <button
-        class="control-btn start-btn"
-        @click="toggleGame"
-        :class="{ pause: isRunning && !gameOver }"
-      >
-        <el-icon :size="20">
-          <component :is="isRunning && !gameOver ? 'Pause' : 'VideoPlay'" />
-        </el-icon>
-        <span>{{ isRunning && !gameOver ? '暂停' : '开始' }}</span>
+    <div class="game-overlay" v-if="gameOver">
+      <div class="overlay-content">
+        <div class="overlay-title gameover">💀 游戏结束</div>
+        <div class="overlay-score">最终得分：{{ score }}</div>
+        <div class="overlay-level">到达关卡：第 {{ level }} 关</div>
+        <button class="overlay-btn" @click="resetGame">重新开始</button>
+      </div>
+    </div>
+
+    <div class="game-overlay" v-if="!isRunning && !gameOver && !showLevelComplete && level === 1 && score === 0">
+      <div class="overlay-content">
+        <div class="overlay-title">⚔️ 转刀割草</div>
+        <div class="overlay-desc">拖动控制移动，用旋转的刀消灭敌人！<br/>收集道具增强实力，击败BOSS通过关卡。</div>
+        <button class="overlay-btn start" @click="startGame">开始游戏</button>
+      </div>
+    </div>
+
+    <div class="buff-bar" v-if="activeBuffs.length > 0">
+      <div class="buff-item" v-for="buff in activeBuffs" :key="buff.type">
+        <span class="buff-icon">{{ buff.icon }}</span>
+        <span class="buff-name">{{ buff.name }}</span>
+      </div>
+    </div>
+
+    <div class="control-panel" v-if="isRunning">
+      <button class="control-btn pause-btn" @click="toggleGame">
+        <el-icon :size="20"><Pause /></el-icon>
+        <span>暂停</span>
       </button>
     </div>
 
-    <div class="game-tip">
-      <p>💡 拖动控制玩家移动，躲避敌人，用旋转的刀消灭它们！</p>
+    <div class="control-panel" v-if="!isRunning && !gameOver && !showLevelComplete && (level > 1 || score > 0)">
+      <button class="control-btn start-btn" @click="toggleGame">
+        <el-icon :size="20"><VideoPlay /></el-icon>
+        <span>继续</span>
+      </button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, inject, computed, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, inject, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -76,13 +140,50 @@ const highScores = inject('highScores')
 const loadHighScores = inject('loadHighScores')
 
 const canvasWidth = ref(360)
-const canvasHeight = ref(480)
+const canvasHeight = ref(520)
 const score = ref(0)
 const gameOver = ref(false)
 const isRunning = ref(false)
-const bladeCount = ref(1)
+const showLevelComplete = ref(false)
+const levelBonus = ref(0)
 
-const highScore = computed(() => highScores['blade'] || 0)
+const level = ref(1)
+const currentWave = ref(1)
+const totalWaves = ref(3)
+const waveEnemiesKilled = ref(0)
+const waveEnemiesTotal = ref(10)
+
+const bladeCount = ref(1)
+const bladeSpeed = ref(0.05)
+const bladeRadius = ref(60)
+const bladeLength = ref(40)
+const bladeDamage = ref(1)
+const playerHp = ref(3)
+const playerSpeed = ref(1)
+
+const missionText = computed(() => {
+  if (bossSpawned && bossAlive) {
+    return '击败BOSS！'
+  }
+  return `消灭敌人 (${waveEnemiesKilled.value}/${waveEnemiesTotal.value})`
+})
+
+const missionProgress = computed(() => {
+  if (bossSpawned && bossAlive) {
+    return Math.round((1 - bossHp / bossMaxHp) * 100)
+  }
+  return Math.min(100, Math.round((waveEnemiesKilled.value / waveEnemiesTotal.value) * 100))
+})
+
+const activeBuffs = computed(() => {
+  const buffs = []
+  if (bladeCount.value > 1) buffs.push({ type: 'blade', icon: '⚔️', name: `x${bladeCount.value}` })
+  if (bladeSpeed.value > 0.05) buffs.push({ type: 'speed', icon: '💨', name: '加速' })
+  if (bladeDamage.value > 1) buffs.push({ type: 'damage', icon: '💥', name: `x${bladeDamage.value}` })
+  if (bladeRadius.value > 60) buffs.push({ type: 'range', icon: '📏', name: '范围' })
+  if (playerSpeed.value > 1) buffs.push({ type: 'movespeed', icon: '👟', name: '移速' })
+  return buffs
+})
 
 let ctx = null
 let animationId = null
@@ -91,21 +192,27 @@ let scoreSubmitted = false
 let player = { x: 0, y: 0, radius: 20 }
 let blades = []
 let bladeAngle = 0
-let bladeSpeed = 0.05
-let bladeRadius = 60
-let bladeLength = 40
 let bladeWidth = 6
 
 let enemies = []
 let enemySpawnTimer = 0
-let enemySpawnInterval = 60
-let enemySpeed = 1.5
+let enemySpawnInterval = 90
+
+let boss = null
+let bossSpawned = false
+let bossAlive = false
+let bossHp = 0
+let bossMaxHp = 0
+
+let obstacles = []
+let chests = []
+let grassPatches = []
 
 let powerups = []
 let powerupSpawnTimer = 0
-let powerupSpawnInterval = 600
 
 let particles = []
+let damageTexts = []
 
 let isDragging = false
 let dragStartX = 0
@@ -113,34 +220,144 @@ let dragStartY = 0
 let playerStartX = 0
 let playerStartY = 0
 
+let screenShake = 0
+let invincibleTimer = 0
+
+const TILE_SIZE = 40
+const MAP_COLS = 12
+const MAP_ROWS = 15
+
 function initGame() {
+  level.value = 1
+  score.value = 0
+  gameOver.value = false
+  showLevelComplete.value = false
+  isRunning.value = false
+  scoreSubmitted = false
+
+  resetPlayerStats()
+  initLevel()
+  draw()
+}
+
+function resetPlayerStats() {
+  bladeCount.value = 1
+  bladeSpeed.value = 0.05
+  bladeRadius.value = 60
+  bladeLength.value = 40
+  bladeDamage.value = 1
+  playerHp.value = 3
+  playerSpeed.value = 1
+}
+
+function initLevel() {
+  currentWave.value = 1
+  totalWaves.value = 2 + Math.floor(level.value / 2)
+  waveEnemiesKilled.value = 0
+  waveEnemiesTotal.value = 8 + level.value * 3
+  enemySpawnInterval = Math.max(40, 100 - level.value * 5)
+
+  bossSpawned = false
+  bossAlive = false
+  boss = null
+
+  enemies = []
+  powerups = []
+  particles = []
+  damageTexts = []
+  enemySpawnTimer = 0
+  powerupSpawnTimer = 0
+  invincibleTimer = 0
+
+  generateMap()
+
   player.x = canvasWidth.value / 2
   player.y = canvasHeight.value / 2
   player.radius = 20
 
-  bladeCount.value = 1
+  const safe = findSafeSpawn(player.x, player.y)
+  player.x = safe.x
+  player.y = safe.y
+
   bladeAngle = 0
-  bladeSpeed = 0.05
-  bladeRadius = 60
-
-  enemies = []
-  enemySpawnTimer = 0
-  enemySpawnInterval = 60
-  enemySpeed = 1.5
-
-  powerups = []
-  powerupSpawnTimer = 0
-  powerupSpawnInterval = 600
-
-  particles = []
-
-  score.value = 0
-  gameOver.value = false
-  isRunning.value = false
-  scoreSubmitted = false
-
   updateBlades()
-  draw()
+}
+
+function generateMap() {
+  obstacles = []
+  chests = []
+  grassPatches = []
+
+  for (let i = 0; i < 6 + level.value; i++) {
+    const x = 30 + Math.random() * (canvasWidth.value - 60)
+    const y = 60 + Math.random() * (canvasHeight.value - 120)
+    const type = Math.random() > 0.5 ? 'rock' : 'tree'
+    const radius = type === 'rock' ? 18 + Math.random() * 10 : 20 + Math.random() * 8
+
+    if (distanceToCenter(x, y) > 80) {
+      obstacles.push({ x, y, radius, type })
+    }
+  }
+
+  for (let i = 0; i < 2 + Math.floor(level.value / 2); i++) {
+    let x, y
+    let attempts = 0
+    do {
+      x = 40 + Math.random() * (canvasWidth.value - 80)
+      y = 80 + Math.random() * (canvasHeight.value - 160)
+      attempts++
+    } while (isNearObstacle(x, y, 50) && attempts < 20)
+
+    chests.push({
+      x, y,
+      radius: 16,
+      opened: false,
+      type: 'chest',
+      pulse: Math.random() * Math.PI * 2
+    })
+  }
+
+  for (let i = 0; i < 15; i++) {
+    grassPatches.push({
+      x: Math.random() * canvasWidth.value,
+      y: Math.random() * canvasHeight.value,
+      size: 15 + Math.random() * 25,
+      type: Math.floor(Math.random() * 3)
+    })
+  }
+}
+
+function distanceToCenter(x, y) {
+  const cx = canvasWidth.value / 2
+  const cy = canvasHeight.value / 2
+  return Math.sqrt((x - cx) ** 2 + (y - cy) ** 2)
+}
+
+function isNearObstacle(x, y, dist) {
+  for (const obs of obstacles) {
+    if (Math.sqrt((x - obs.x) ** 2 + (y - obs.y) ** 2) < obs.radius + dist) {
+      return true
+    }
+  }
+  return false
+}
+
+function findSafeSpawn(nearX, nearY) {
+  let x = nearX
+  let y = nearY
+  let attempts = 0
+
+  while (isNearObstacle(x, y, 30) && attempts < 50) {
+    const angle = Math.random() * Math.PI * 2
+    const dist = 30 + Math.random() * 50
+    x = nearX + Math.cos(angle) * dist
+    y = nearY + Math.sin(angle) * dist
+    x = Math.max(30, Math.min(canvasWidth.value - 30, x))
+    y = Math.max(50, Math.min(canvasHeight.value - 50, y))
+    attempts++
+  }
+
+  return { x, y }
 }
 
 function updateBlades() {
@@ -150,109 +367,216 @@ function updateBlades() {
     const angle = (Math.PI * 2 / count) * i + bladeAngle
     blades.push({
       angle: angle,
-      x: player.x + Math.cos(angle) * bladeRadius,
-      y: player.y + Math.sin(angle) * bladeRadius
+      x: player.x + Math.cos(angle) * bladeRadius.value,
+      y: player.y + Math.sin(angle) * bladeRadius.value
     })
   }
 }
 
 function spawnEnemy() {
+  if (enemies.length >= 15 + level.value * 2) return
+  if (waveEnemiesKilled.value + enemies.length >= waveEnemiesTotal.value && !bossSpawned) return
+
   const side = Math.floor(Math.random() * 4)
   let x, y
 
   switch (side) {
-    case 0:
-      x = Math.random() * canvasWidth.value
-      y = -20
-      break
-    case 1:
-      x = canvasWidth.value + 20
-      y = Math.random() * canvasHeight.value
-      break
-    case 2:
-      x = Math.random() * canvasWidth.value
-      y = canvasHeight.value + 20
-      break
-    case 3:
-      x = -20
-      y = Math.random() * canvasHeight.value
-      break
+    case 0: x = Math.random() * canvasWidth.value; y = -20; break
+    case 1: x = canvasWidth.value + 20; y = Math.random() * canvasHeight.value; break
+    case 2: x = Math.random() * canvasWidth.value; y = canvasHeight.value + 20; break
+    case 3: x = -20; y = Math.random() * canvasHeight.value; break
   }
 
-  const types = ['normal', 'fast', 'tank']
+  const types = getEnemyTypesForLevel()
   const type = types[Math.floor(Math.random() * types.length)]
+  const enemy = createEnemy(x, y, type)
+  enemies.push(enemy)
+}
 
+function getEnemyTypesForLevel() {
+  const types = ['normal']
+  if (level.value >= 2) types.push('fast')
+  if (level.value >= 3) types.push('tank')
+  if (level.value >= 4) types.push('ranged')
+  if (level.value >= 5) types.push('fast', 'tank')
+  return types
+}
+
+function createEnemy(x, y, type) {
+  const levelMult = 1 + (level.value - 1) * 0.15
   let enemy = { x, y, type }
 
   switch (type) {
     case 'normal':
-      enemy.radius = 15
-      enemy.speed = enemySpeed
-      enemy.hp = 1
+      enemy.radius = 14
+      enemy.speed = 1.2 * levelMult
+      enemy.hp = Math.ceil(1 * levelMult)
+      enemy.maxHp = enemy.hp
       enemy.color = '#4ade80'
       enemy.score = 10
       break
     case 'fast':
       enemy.radius = 10
-      enemy.speed = enemySpeed * 1.8
-      enemy.hp = 1
+      enemy.speed = 2.2 * levelMult
+      enemy.hp = Math.ceil(1 * levelMult)
+      enemy.maxHp = enemy.hp
       enemy.color = '#facc15'
       enemy.score = 15
       break
     case 'tank':
       enemy.radius = 22
-      enemy.speed = enemySpeed * 0.6
-      enemy.hp = 3
+      enemy.speed = 0.8 * levelMult
+      enemy.hp = Math.ceil(4 * levelMult)
+      enemy.maxHp = enemy.hp
       enemy.color = '#f87171'
-      enemy.score = 30
+      enemy.score = 35
+      break
+    case 'ranged':
+      enemy.radius = 13
+      enemy.speed = 1.0 * levelMult
+      enemy.hp = Math.ceil(2 * levelMult)
+      enemy.maxHp = enemy.hp
+      enemy.color = '#a78bfa'
+      enemy.score = 25
+      enemy.attackTimer = 0
+      enemy.attackInterval = 120
       break
   }
 
-  enemies.push(enemy)
+  return enemy
 }
 
-function spawnPowerup() {
-  const margin = 40
-  const x = margin + Math.random() * (canvasWidth.value - margin * 2)
-  const y = margin + Math.random() * (canvasHeight.value - margin * 2)
+function spawnBoss() {
+  if (bossSpawned) return
+  bossSpawned = true
+  bossAlive = true
+
+  const levelMult = 1 + (level.value - 1) * 0.3
+  bossMaxHp = Math.ceil(50 * levelMult)
+  bossHp = bossMaxHp
+
+  boss = {
+    x: canvasWidth.value / 2,
+    y: -60,
+    radius: 45,
+    speed: 0.8,
+    type: 'boss',
+    phase: 1,
+    attackTimer: 0,
+    attackPattern: 0,
+    color: '#ef4444',
+    score: 500 * level.value
+  }
+}
+
+function spawnPowerup(x, y, type = null) {
+  const types = ['blade', 'damage', 'speed', 'range', 'heal', 'movespeed']
+  const weights = [30, 20, 20, 15, 10, 5]
+
+  let powerupType = type
+  if (!powerupType) {
+    const total = weights.reduce((a, b) => a + b, 0)
+    let rand = Math.random() * total
+    for (let i = 0; i < types.length; i++) {
+      rand -= weights[i]
+      if (rand <= 0) {
+        powerupType = types[i]
+        break
+      }
+    }
+  }
 
   powerups.push({
-    x,
-    y,
-    radius: 18,
-    type: 'blade',
-    pulse: 0
+    x, y,
+    radius: 16,
+    type: powerupType,
+    pulse: 0,
+    vy: -2,
+    life: 600
   })
+}
+
+function getPowerupInfo(type) {
+  const info = {
+    blade: { icon: '⚔️', name: '刀数+1', color: '#f472b6' },
+    damage: { icon: '💥', name: '伤害+1', color: '#ef4444' },
+    speed: { icon: '💨', name: '转速+', color: '#3b82f6' },
+    range: { icon: '📏', name: '范围+', color: '#22c55e' },
+    heal: { icon: '❤️', name: '生命+1', color: '#ec4899' },
+    movespeed: { icon: '👟', name: '移速+', color: '#f59e0b' }
+  }
+  return info[type] || info.blade
+}
+
+function applyPowerup(type) {
+  switch (type) {
+    case 'blade':
+      bladeCount.value = Math.min(8, bladeCount.value + 1)
+      break
+    case 'damage':
+      bladeDamage.value += 1
+      break
+    case 'speed':
+      bladeSpeed.value += 0.015
+      break
+    case 'range':
+      bladeRadius.value += 8
+      bladeLength.value += 5
+      break
+    case 'heal':
+      playerHp.value = Math.min(5, playerHp.value + 1)
+      break
+    case 'movespeed':
+      playerSpeed.value += 0.15
+      break
+  }
+  updateBlades()
+}
+
+function openChest(chest) {
+  if (chest.opened) return
+  chest.opened = true
+
+  addParticles(chest.x, chest.y, '#fbbf24', 20)
+
+  const numItems = 1 + Math.floor(Math.random() * 2)
+  for (let i = 0; i < numItems; i++) {
+    setTimeout(() => {
+      const angle = (Math.PI * 2 / numItems) * i + Math.random() * 0.5
+      const dist = 30 + Math.random() * 20
+      spawnPowerup(
+        chest.x + Math.cos(angle) * dist,
+        chest.y + Math.sin(angle) * dist
+      )
+    }, i * 100)
+  }
+
+  score.value += 50
 }
 
 function addParticles(x, y, color, count = 8) {
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2
-    const speed = 1 + Math.random() * 3
+    const speed = 1 + Math.random() * 4
     particles.push({
-      x,
-      y,
+      x, y,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
-      radius: 2 + Math.random() * 3,
+      radius: 2 + Math.random() * 4,
       color,
       life: 1
     })
   }
 }
 
-function updateParticles() {
-  for (let i = particles.length - 1; i >= 0; i--) {
-    const p = particles[i]
-    p.x += p.vx
-    p.y += p.vy
-    p.life -= 0.02
-    p.radius *= 0.98
-
-    if (p.life <= 0) {
-      particles.splice(i, 1)
-    }
-  }
+function addDamageText(x, y, text, color = '#fff') {
+  damageTexts.push({
+    x, y,
+    text,
+    color,
+    life: 1,
+    vy: -1.5
+  })
 }
 
 function checkCollisions() {
@@ -264,78 +588,150 @@ function checkCollisions() {
     const dist = Math.sqrt(dx * dx + dy * dy)
 
     if (dist < player.radius + enemy.radius) {
-      gameOver.value = true
-      isRunning.value = false
-      handleGameOver()
-      return
-    }
+      if (invincibleTimer <= 0) {
+        playerHp.value--
+        invincibleTimer = 90
+        screenShake = 10
+        addParticles(player.x, player.y, '#ef4444', 15)
 
-    for (let j = 0; j < blades.length; j++) {
-      const blade = blades[j]
-      const bdx = blade.x - player.x
-      const bdy = blade.y - player.y
-
-      const bladeEndX = blade.x + (bdx / bladeRadius) * bladeLength
-      const bladeEndY = blade.y + (bdy / bladeRadius) * bladeLength
-
-      const bdist = pointToLineDistance(
-        enemy.x, enemy.y,
-        blade.x, blade.y,
-        bladeEndX, bladeEndY
-      )
-
-      if (bdist < enemy.radius + bladeWidth / 2) {
-        const tipDist = Math.sqrt(
-          Math.pow(enemy.x - bladeEndX, 2) +
-          Math.pow(enemy.y - bladeEndY, 2)
-        )
-        const baseDist = Math.sqrt(
-          Math.pow(enemy.x - blade.x, 2) +
-          Math.pow(enemy.y - blade.y, 2)
-        )
-
-        if (tipDist < enemy.radius + bladeWidth / 2 ||
-            baseDist < enemy.radius + bladeWidth / 2 ||
-            bdist < enemy.radius + bladeWidth / 2) {
-          enemy.hp--
-          addParticles(enemy.x, enemy.y, enemy.color, 5)
-
-          if (enemy.hp <= 0) {
-            score.value += enemy.score
-            addParticles(enemy.x, enemy.y, enemy.color, 12)
-            enemies.splice(i, 1)
-
-            if (score.value % 200 === 0 && enemySpawnInterval > 20) {
-              enemySpawnInterval -= 5
-            }
-            if (score.value % 500 === 0) {
-              enemySpeed += 0.2
-            }
-          }
-          break
+        if (playerHp.value <= 0) {
+          endGame()
+          return
         }
       }
+    }
+
+    let hitByBlade = false
+    for (let j = 0; j < blades.length; j++) {
+      if (isBladeHittingEnemy(blades[j], enemy)) {
+        enemy.hp -= bladeDamage.value
+        hitByBlade = true
+
+        const angle = Math.atan2(enemy.y - player.y, enemy.x - player.x)
+        enemy.x += Math.cos(angle) * 3
+        enemy.y += Math.sin(angle) * 3
+
+        addParticles(enemy.x, enemy.y, enemy.color, 4)
+        addDamageText(enemy.x, enemy.y - enemy.radius, `-${bladeDamage.value}`, '#fff')
+
+        break
+      }
+    }
+
+    if (enemy.hp <= 0) {
+      score.value += enemy.score
+      waveEnemiesKilled.value++
+      addParticles(enemy.x, enemy.y, enemy.color, 12)
+
+      if (Math.random() < 0.15) {
+        spawnPowerup(enemy.x, enemy.y)
+      }
+
+      enemies.splice(i, 1)
+    }
+  }
+
+  if (boss && bossAlive) {
+    for (let j = 0; j < blades.length; j++) {
+      if (isBladeHittingEnemy(blades[j], boss)) {
+        bossHp -= bladeDamage.value * 0.5
+        addParticles(boss.x + (Math.random() - 0.5) * boss.radius,
+                     boss.y + (Math.random() - 0.5) * boss.radius, '#ef4444', 3)
+        break
+      }
+    }
+
+    const dx = boss.x - player.x
+    const dy = boss.y - player.y
+    const dist = Math.sqrt(dx * dx + dy * dy)
+
+    if (dist < player.radius + boss.radius) {
+      if (invincibleTimer <= 0) {
+        playerHp.value -= 2
+        invincibleTimer = 120
+        screenShake = 15
+        addParticles(player.x, player.y, '#ef4444', 20)
+
+        if (playerHp.value <= 0) {
+          endGame()
+          return
+        }
+      }
+    }
+
+    if (bossHp <= 0) {
+      bossAlive = false
+      score.value += boss.score
+      screenShake = 20
+      addParticles(boss.x, boss.y, '#ef4444', 40)
+      addParticles(boss.x, boss.y, '#fbbf24', 30)
+
+      for (let i = 0; i < 4; i++) {
+        setTimeout(() => {
+          const angle = Math.random() * Math.PI * 2
+          const dist = 30 + Math.random() * 40
+          spawnPowerup(boss.x + Math.cos(angle) * dist, boss.y + Math.sin(angle) * dist)
+        }, i * 150)
+      }
+
+      boss = null
+
+      setTimeout(() => {
+        completeLevel()
+      }, 1000)
     }
   }
 
   for (let i = powerups.length - 1; i >= 0; i--) {
-    const powerup = powerups[i]
-    const dx = powerup.x - player.x
-    const dy = powerup.y - player.y
+    const p = powerups[i]
+    const dx = p.x - player.x
+    const dy = p.y - player.y
     const dist = Math.sqrt(dx * dx + dy * dy)
 
-    if (dist < player.radius + powerup.radius) {
-      if (powerup.type === 'blade') {
-        bladeCount.value++
-        if (bladeCount.value > 8) bladeCount.value = 8
-        bladeSpeed += 0.005
-        if (bladeRadius < 80) bladeRadius += 3
-        updateBlades()
-      }
-      addParticles(powerup.x, powerup.y, '#fbbf24', 15)
+    if (dist < player.radius + p.radius) {
+      applyPowerup(p.type)
+      const info = getPowerupInfo(p.type)
+      addParticles(p.x, p.y, info.color, 12)
+      addDamageText(p.x, p.y - 20, info.name, info.color)
       powerups.splice(i, 1)
     }
   }
+
+  for (const chest of chests) {
+    if (chest.opened) continue
+    const dx = chest.x - player.x
+    const dy = chest.y - player.y
+    const dist = Math.sqrt(dx * dx + dy * dy)
+
+    if (dist < player.radius + chest.radius) {
+      openChest(chest)
+    }
+  }
+}
+
+function isBladeHittingEnemy(blade, enemy) {
+  const angle = Math.atan2(blade.y - player.y, blade.x - player.x)
+  const tipX = player.x + Math.cos(angle) * (bladeRadius.value + bladeLength.value)
+  const tipY = player.y + Math.sin(angle) * (bladeRadius.value + bladeLength.value)
+  const baseX = blade.x
+  const baseY = blade.y
+
+  const dist = pointToLineDistance(enemy.x, enemy.y, baseX, baseY, tipX, tipY)
+
+  if (dist < enemy.radius + bladeWidth / 2) {
+    const tipDist = Math.sqrt((enemy.x - tipX) ** 2 + (enemy.y - tipY) ** 2)
+    const baseDist = Math.sqrt((enemy.x - baseX) ** 2 + (enemy.y - baseY) ** 2)
+    if (tipDist < enemy.radius + bladeWidth || baseDist < enemy.radius + bladeWidth) {
+      return true
+    }
+
+    const totalLen = Math.sqrt((tipX - baseX) ** 2 + (tipY - baseY) ** 2)
+    const projLen = ((enemy.x - baseX) * (tipX - baseX) + (enemy.y - baseY) * (tipY - baseY)) / totalLen
+    if (projLen >= 0 && projLen <= totalLen) {
+      return true
+    }
+  }
+  return false
 }
 
 function pointToLineDistance(px, py, x1, y1, x2, y2) {
@@ -343,47 +739,358 @@ function pointToLineDistance(px, py, x1, y1, x2, y2) {
   const B = py - y1
   const C = x2 - x1
   const D = y2 - y1
-
   const dot = A * C + B * D
   const lenSq = C * C + D * D
-  let param = -1
-
-  if (lenSq !== 0) param = dot / lenSq
+  let param = lenSq !== 0 ? dot / lenSq : -1
 
   let xx, yy
+  if (param < 0) { xx = x1; yy = y1 }
+  else if (param > 1) { xx = x2; yy = y2 }
+  else { xx = x1 + param * C; yy = y1 + param * D }
 
-  if (param < 0) {
-    xx = x1
-    yy = y1
-  } else if (param > 1) {
-    xx = x2
-    yy = y2
-  } else {
-    xx = x1 + param * C
-    yy = y1 + param * D
-  }
-
-  const dx = px - xx
-  const dy = py - yy
-  return Math.sqrt(dx * dx + dy * dy)
+  return Math.sqrt((px - xx) ** 2 + (py - yy) ** 2)
 }
 
 function updateEnemies() {
-  for (let i = 0; i < enemies.length; i++) {
-    const enemy = enemies[i]
+  for (const enemy of enemies) {
     const dx = player.x - enemy.x
     const dy = player.y - enemy.y
     const dist = Math.sqrt(dx * dx + dy * dy)
 
     if (dist > 0) {
-      enemy.x += (dx / dist) * enemy.speed
-      enemy.y += (dy / dist) * enemy.speed
+      const moveX = (dx / dist) * enemy.speed
+      const moveY = (dy / dist) * enemy.speed
+
+      let newX = enemy.x + moveX
+      let newY = enemy.y + moveY
+
+      let blocked = false
+      for (const obs of obstacles) {
+        const odx = newX - obs.x
+        const ody = newY - obs.y
+        const odist = Math.sqrt(odx * odx + ody * ody)
+        if (odist < enemy.radius + obs.radius) {
+          blocked = true
+          break
+        }
+      }
+
+      if (!blocked) {
+        enemy.x = newX
+        enemy.y = newY
+      } else {
+        if (dy !== 0) enemy.y += (dy / Math.abs(dy)) * enemy.speed * 0.5
+        if (dx !== 0) enemy.x += (dx / Math.abs(dx)) * enemy.speed * 0.5
+      }
     }
+  }
+
+  if (boss && bossAlive) {
+    const dx = player.x - boss.x
+    const dy = player.y - boss.y
+    const dist = Math.sqrt(dx * dx + dy * dy)
+
+    if (dist > 100) {
+      boss.x += (dx / dist) * boss.speed
+      boss.y += (dy / dist) * boss.speed
+    } else {
+      boss.attackTimer++
+      if (boss.attackTimer >= 60) {
+        boss.attackTimer = 0
+        screenShake = 5
+      }
+    }
+  }
+}
+
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i]
+    p.x += p.vx
+    p.y += p.vy
+    p.vy += 0.1
+    p.life -= 0.025
+    p.radius *= 0.98
+
+    if (p.life <= 0) particles.splice(i, 1)
+  }
+
+  for (let i = damageTexts.length - 1; i >= 0; i--) {
+    const t = damageTexts[i]
+    t.y += t.vy
+    t.life -= 0.02
+    if (t.life <= 0) damageTexts.splice(i, 1)
+  }
+}
+
+function checkWaveComplete() {
+  if (bossSpawned) return
+
+  if (waveEnemiesKilled.value >= waveEnemiesTotal.value && enemies.length === 0) {
+    if (currentWave.value < totalWaves.value) {
+      currentWave.value++
+      waveEnemiesKilled.value = 0
+      waveEnemiesTotal.value = 10 + level.value * 3 + currentWave.value * 5
+      enemySpawnInterval = Math.max(30, enemySpawnInterval - 10)
+    } else {
+      spawnBoss()
+    }
+  }
+}
+
+function completeLevel() {
+  showLevelComplete.value = true
+  isRunning.value = false
+  levelBonus.value = level.value * 200
+  score.value += levelBonus.value
+}
+
+function nextLevel() {
+  showLevelComplete.value = false
+  level.value++
+  initLevel()
+  isRunning.value = true
+  gameLoop()
+}
+
+function endGame() {
+  gameOver.value = true
+  isRunning.value = false
+  handleGameOver()
+}
+
+function draw() {
+  if (!ctx) return
+
+  ctx.save()
+  if (screenShake > 0) {
+    ctx.translate(
+      (Math.random() - 0.5) * screenShake,
+      (Math.random() - 0.5) * screenShake
+    )
+    screenShake *= 0.9
+    if (screenShake < 0.5) screenShake = 0
+  }
+
+  drawBackground()
+  drawGrass()
+  drawObstacles()
+  drawChests()
+  drawPowerups()
+  drawParticles()
+  drawEnemies()
+  drawBoss()
+  drawBlades()
+  drawPlayer()
+  drawDamageTexts()
+
+  ctx.restore()
+}
+
+function drawBackground() {
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvasHeight.value)
+  gradient.addColorStop(0, '#1a4d2e')
+  gradient.addColorStop(1, '#0d2818')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, canvasWidth.value, canvasHeight.value)
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)'
+  ctx.lineWidth = 1
+  for (let x = 0; x < canvasWidth.value; x += TILE_SIZE) {
+    ctx.beginPath()
+    ctx.moveTo(x, 0)
+    ctx.lineTo(x, canvasHeight.value)
+    ctx.stroke()
+  }
+  for (let y = 0; y < canvasHeight.value; y += TILE_SIZE) {
+    ctx.beginPath()
+    ctx.moveTo(0, y)
+    ctx.lineTo(canvasWidth.value, y)
+    ctx.stroke()
+  }
+}
+
+function drawGrass() {
+  for (const grass of grassPatches) {
+    ctx.save()
+    ctx.globalAlpha = 0.3
+    ctx.fillStyle = '#22c55e'
+    ctx.beginPath()
+    ctx.arc(grass.x, grass.y, grass.size, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+  }
+}
+
+function drawObstacles() {
+  for (const obs of obstacles) {
+    ctx.save()
+    ctx.shadowColor = 'rgba(0,0,0,0.3)'
+    ctx.shadowBlur = 8
+    ctx.shadowOffsetY = 3
+
+    if (obs.type === 'rock') {
+      const gradient = ctx.createRadialGradient(
+        obs.x - obs.radius * 0.3, obs.y - obs.radius * 0.3, 0,
+        obs.x, obs.y, obs.radius
+      )
+      gradient.addColorStop(0, '#9ca3af')
+      gradient.addColorStop(1, '#4b5563')
+      ctx.fillStyle = gradient
+      ctx.beginPath()
+      ctx.arc(obs.x, obs.y, obs.radius, 0, Math.PI * 2)
+      ctx.fill()
+
+      ctx.fillStyle = 'rgba(255,255,255,0.2)'
+      ctx.beginPath()
+      ctx.arc(obs.x - obs.radius * 0.3, obs.y - obs.radius * 0.3, obs.radius * 0.3, 0, Math.PI * 2)
+      ctx.fill()
+    } else {
+      ctx.fillStyle = '#78350f'
+      ctx.fillRect(obs.x - 4, obs.y, 8, obs.radius * 0.6)
+
+      const gradient = ctx.createRadialGradient(
+        obs.x, obs.y - obs.radius * 0.2, 0,
+        obs.x, obs.y - obs.radius * 0.2, obs.radius
+      )
+      gradient.addColorStop(0, '#22c55e')
+      gradient.addColorStop(1, '#15803d')
+      ctx.fillStyle = gradient
+      ctx.beginPath()
+      ctx.arc(obs.x, obs.y - obs.radius * 0.2, obs.radius, 0, Math.PI * 2)
+      ctx.fill()
+
+      ctx.fillStyle = 'rgba(34, 197, 94, 0.6)'
+      ctx.beginPath()
+      ctx.arc(obs.x - obs.radius * 0.5, obs.y, obs.radius * 0.6, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(obs.x + obs.radius * 0.5, obs.y, obs.radius * 0.6, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    ctx.restore()
+  }
+}
+
+function drawChests() {
+  for (const chest of chests) {
+    chest.pulse = (chest.pulse + 0.03) % (Math.PI * 2)
+
+    ctx.save()
+
+    if (!chest.opened) {
+      ctx.shadowColor = '#fbbf24'
+      ctx.shadowBlur = 10 + Math.sin(chest.pulse) * 5
+
+      const cy = chest.y + Math.sin(chest.pulse) * 2
+      const w = chest.radius * 1.6
+      const h = chest.radius * 1.3
+
+      ctx.fillStyle = '#92400e'
+      ctx.fillRect(chest.x - w / 2, cy - h / 2, w, h)
+
+      const bodyGrad = ctx.createLinearGradient(chest.x - w / 2, 0, chest.x + w / 2, 0)
+      bodyGrad.addColorStop(0, '#d97706')
+      bodyGrad.addColorStop(0.5, '#fbbf24')
+      bodyGrad.addColorStop(1, '#d97706')
+      ctx.fillStyle = bodyGrad
+      ctx.fillRect(chest.x - w / 2, cy - h / 4, w, h * 0.75)
+
+      const lidGrad = ctx.createLinearGradient(chest.x - w / 2, 0, chest.x + w / 2, 0)
+      lidGrad.addColorStop(0, '#b45309')
+      lidGrad.addColorStop(0.5, '#f59e0b')
+      lidGrad.addColorStop(1, '#b45309')
+      ctx.fillStyle = lidGrad
+      ctx.beginPath()
+      ctx.moveTo(chest.x - w / 2, cy - h / 4)
+      ctx.quadraticCurveTo(chest.x, cy - h / 2 - 8, chest.x + w / 2, cy - h / 4)
+      ctx.lineTo(chest.x + w / 2, cy - h / 4)
+      ctx.lineTo(chest.x - w / 2, cy - h / 4)
+      ctx.fill()
+
+      ctx.fillStyle = '#fbbf24'
+      ctx.fillRect(chest.x - 4, cy - h / 4, 8, h * 0.5)
+      ctx.beginPath()
+      ctx.arc(chest.x, cy + 2, 5, 0, Math.PI * 2)
+      ctx.fill()
+    } else {
+      ctx.globalAlpha = 0.4
+      const w = chest.radius * 1.5
+      const h = chest.radius * 1.2
+      ctx.fillStyle = '#78350f'
+      ctx.fillRect(chest.x - w / 2, chest.y - h / 4, w, h * 0.75)
+    }
+
+    ctx.restore()
+  }
+}
+
+function drawPowerups() {
+  for (const p of powerups) {
+    p.pulse = (p.pulse + 0.08) % (Math.PI * 2)
+    const info = getPowerupInfo(p.type)
+    const scale = 1 + Math.sin(p.pulse) * 0.15
+
+    ctx.save()
+    ctx.shadowColor = info.color
+    ctx.shadowBlur = 12
+
+    const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius * scale)
+    gradient.addColorStop(0, '#fff')
+    gradient.addColorStop(0.3, info.color)
+    gradient.addColorStop(1, info.color)
+
+    ctx.fillStyle = gradient
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, p.radius * scale, 0, Math.PI * 2)
+    ctx.fill()
+
+    ctx.fillStyle = '#fff'
+    ctx.font = 'bold 14px Arial'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(info.icon, p.x, p.y)
+
+    ctx.restore()
+  }
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.save()
+    ctx.globalAlpha = p.life
+    ctx.fillStyle = p.color
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+  }
+}
+
+function drawDamageTexts() {
+  for (const t of damageTexts) {
+    ctx.save()
+    ctx.globalAlpha = t.life
+    ctx.fillStyle = t.color
+    ctx.font = 'bold 14px Arial'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)'
+    ctx.lineWidth = 2
+    ctx.strokeText(t.text, t.x, t.y)
+    ctx.fillText(t.text, t.x, t.y)
+    ctx.restore()
   }
 }
 
 function drawPlayer() {
   ctx.save()
+
+  if (invincibleTimer > 0 && Math.floor(invincibleTimer / 5) % 2 === 0) {
+    ctx.globalAlpha = 0.5
+  }
+
   ctx.shadowColor = '#60a5fa'
   ctx.shadowBlur = 20
 
@@ -401,28 +1108,26 @@ function drawPlayer() {
 
   ctx.fillStyle = '#fff'
   ctx.beginPath()
-  ctx.arc(player.x - 5, player.y - 3, 4, 0, Math.PI * 2)
-  ctx.arc(player.x + 5, player.y - 3, 4, 0, Math.PI * 2)
+  ctx.arc(player.x - 6, player.y - 3, 5, 0, Math.PI * 2)
+  ctx.arc(player.x + 6, player.y - 3, 5, 0, Math.PI * 2)
   ctx.fill()
 
   ctx.fillStyle = '#1e3a5f'
   ctx.beginPath()
-  ctx.arc(player.x - 4, player.y - 3, 2, 0, Math.PI * 2)
-  ctx.arc(player.x + 6, player.y - 3, 2, 0, Math.PI * 2)
+  ctx.arc(player.x - 5, player.y - 3, 2.5, 0, Math.PI * 2)
+  ctx.arc(player.x + 7, player.y - 3, 2.5, 0, Math.PI * 2)
   ctx.fill()
 
   ctx.restore()
 }
 
 function drawBlades() {
-  for (let i = 0; i < blades.length; i++) {
-    const blade = blades[i]
+  for (const blade of blades) {
     const angle = Math.atan2(blade.y - player.y, blade.x - player.x)
-
-    const tipX = player.x + Math.cos(angle) * (bladeRadius + bladeLength)
-    const tipY = player.y + Math.sin(angle) * (bladeRadius + bladeLength)
-    const baseX = player.x + Math.cos(angle) * bladeRadius
-    const baseY = player.y + Math.sin(angle) * bladeRadius
+    const tipX = player.x + Math.cos(angle) * (bladeRadius.value + bladeLength.value)
+    const tipY = player.y + Math.sin(angle) * (bladeRadius.value + bladeLength.value)
+    const baseX = blade.x
+    const baseY = blade.y
 
     ctx.save()
     ctx.shadowColor = '#f472b6'
@@ -438,12 +1143,12 @@ function drawBlades() {
 
     ctx.fillStyle = '#f472b6'
     ctx.beginPath()
-    ctx.arc(baseX, baseY, bladeWidth / 2 + 2, 0, Math.PI * 2)
+    ctx.arc(baseX, baseY, bladeWidth / 2 + 3, 0, Math.PI * 2)
     ctx.fill()
 
     ctx.fillStyle = '#fce7f3'
     ctx.beginPath()
-    ctx.arc(tipX, tipY, bladeWidth / 2 + 1, 0, Math.PI * 2)
+    ctx.arc(tipX, tipY, bladeWidth / 2 + 2, 0, Math.PI * 2)
     ctx.fill()
 
     ctx.restore()
@@ -451,12 +1156,10 @@ function drawBlades() {
 }
 
 function drawEnemies() {
-  for (let i = 0; i < enemies.length; i++) {
-    const enemy = enemies[i]
-
+  for (const enemy of enemies) {
     ctx.save()
     ctx.shadowColor = enemy.color
-    ctx.shadowBlur = 10
+    ctx.shadowBlur = 8
 
     ctx.fillStyle = enemy.color
     ctx.beginPath()
@@ -477,124 +1180,126 @@ function drawEnemies() {
     ctx.arc(enemy.x + eyeOffset + 1, enemy.y - eyeOffset * 0.5, eyeSize * 0.5, 0, Math.PI * 2)
     ctx.fill()
 
-    if (enemy.type === 'tank' && enemy.hp > 1) {
-      ctx.fillStyle = '#fff'
-      ctx.font = 'bold 12px Arial'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(enemy.hp, enemy.x, enemy.y + enemy.radius * 0.1)
+    if (enemy.maxHp > 1) {
+      const barW = enemy.radius * 2
+      const barH = 4
+      const barX = enemy.x - barW / 2
+      const barY = enemy.y - enemy.radius - 8
+
+      ctx.fillStyle = 'rgba(0,0,0,0.5)'
+      ctx.fillRect(barX, barY, barW, barH)
+
+      ctx.fillStyle = '#22c55e'
+      ctx.fillRect(barX, barY, barW * (enemy.hp / enemy.maxHp), barH)
     }
 
     ctx.restore()
   }
 }
 
-function drawPowerups() {
-  for (let i = 0; i < powerups.length; i++) {
-    const powerup = powerups[i]
-    powerup.pulse = (powerup.pulse + 0.05) % (Math.PI * 2)
-    const pulseScale = 1 + Math.sin(powerup.pulse) * 0.1
+function drawBoss() {
+  if (!boss || !bossAlive) return
 
-    ctx.save()
-    ctx.shadowColor = '#fbbf24'
-    ctx.shadowBlur = 15
+  ctx.save()
+  ctx.shadowColor = '#dc2626'
+  ctx.shadowBlur = 25
 
-    const gradient = ctx.createRadialGradient(
-      powerup.x, powerup.y, 0,
-      powerup.x, powerup.y, powerup.radius * pulseScale
-    )
-    gradient.addColorStop(0, '#fde68a')
-    gradient.addColorStop(1, '#f59e0b')
+  const gradient = ctx.createRadialGradient(
+    boss.x - boss.radius * 0.3, boss.y - boss.radius * 0.3, 0,
+    boss.x, boss.y, boss.radius
+  )
+  gradient.addColorStop(0, '#fca5a5')
+  gradient.addColorStop(0.5, '#ef4444')
+  gradient.addColorStop(1, '#b91c1c')
 
-    ctx.fillStyle = gradient
-    ctx.beginPath()
-    ctx.arc(powerup.x, powerup.y, powerup.radius * pulseScale, 0, Math.PI * 2)
-    ctx.fill()
-
-    ctx.fillStyle = '#fff'
-    ctx.font = 'bold 16px Arial'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('+1', powerup.x, powerup.y)
-
-    ctx.restore()
-  }
-}
-
-function drawParticles() {
-  for (let i = 0; i < particles.length; i++) {
-    const p = particles[i]
-    ctx.save()
-    ctx.globalAlpha = p.life
-    ctx.fillStyle = p.color
-    ctx.beginPath()
-    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.restore()
-  }
-}
-
-function drawBackground() {
-  const gradient = ctx.createLinearGradient(0, 0, 0, canvasHeight.value)
-  gradient.addColorStop(0, '#1a1a2e')
-  gradient.addColorStop(1, '#16213e')
   ctx.fillStyle = gradient
-  ctx.fillRect(0, 0, canvasWidth.value, canvasHeight.value)
+  ctx.beginPath()
+  ctx.arc(boss.x, boss.y, boss.radius, 0, Math.PI * 2)
+  ctx.fill()
 
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)'
-  ctx.lineWidth = 1
-  const gridSize = 30
-  for (let x = 0; x < canvasWidth.value; x += gridSize) {
-    ctx.beginPath()
-    ctx.moveTo(x, 0)
-    ctx.lineTo(x, canvasHeight.value)
-    ctx.stroke()
-  }
-  for (let y = 0; y < canvasHeight.value; y += gridSize) {
-    ctx.beginPath()
-    ctx.moveTo(0, y)
-    ctx.lineTo(canvasWidth.value, y)
-    ctx.stroke()
-  }
-}
+  ctx.fillStyle = '#7f1d1d'
+  ctx.beginPath()
+  ctx.moveTo(boss.x - boss.radius * 0.6, boss.y - boss.radius * 0.5)
+  ctx.lineTo(boss.x - boss.radius * 0.4, boss.y - boss.radius * 1.1)
+  ctx.lineTo(boss.x - boss.radius * 0.2, boss.y - boss.radius * 0.5)
+  ctx.fill()
+  ctx.beginPath()
+  ctx.moveTo(boss.x + boss.radius * 0.6, boss.y - boss.radius * 0.5)
+  ctx.lineTo(boss.x + boss.radius * 0.4, boss.y - boss.radius * 1.1)
+  ctx.lineTo(boss.x + boss.radius * 0.2, boss.y - boss.radius * 0.5)
+  ctx.fill()
 
-function draw() {
-  if (!ctx) return
+  ctx.fillStyle = '#fef08a'
+  ctx.beginPath()
+  ctx.arc(boss.x - boss.radius * 0.35, boss.y - boss.radius * 0.1, boss.radius * 0.2, 0, Math.PI * 2)
+  ctx.arc(boss.x + boss.radius * 0.35, boss.y - boss.radius * 0.1, boss.radius * 0.2, 0, Math.PI * 2)
+  ctx.fill()
 
-  drawBackground()
-  drawParticles()
-  drawPowerups()
-  drawEnemies()
-  drawBlades()
-  drawPlayer()
+  ctx.fillStyle = '#000'
+  ctx.beginPath()
+  ctx.arc(boss.x - boss.radius * 0.3, boss.y - boss.radius * 0.05, boss.radius * 0.1, 0, Math.PI * 2)
+  ctx.arc(boss.x + boss.radius * 0.4, boss.y - boss.radius * 0.05, boss.radius * 0.1, 0, Math.PI * 2)
+  ctx.fill()
 
-  if (gameOver.value) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'
-    ctx.fillRect(0, 0, canvasWidth.value, canvasHeight.value)
-  }
+  ctx.strokeStyle = '#7f1d1d'
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.arc(boss.x, boss.y + boss.radius * 0.2, boss.radius * 0.3, 0.2, Math.PI - 0.2)
+  ctx.stroke()
+
+  const barW = boss.radius * 2.5
+  const barH = 8
+  const barX = boss.x - barW / 2
+  const barY = boss.y - boss.radius - 20
+
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'
+  ctx.fillRect(barX - 2, barY - 2, barW + 4, barH + 4)
+
+  const hpRatio = bossHp / bossMaxHp
+  const hpGradient = ctx.createLinearGradient(barX, 0, barX + barW, 0)
+  hpGradient.addColorStop(0, '#ef4444')
+  hpGradient.addColorStop(1, '#f97316')
+  ctx.fillStyle = hpGradient
+  ctx.fillRect(barX, barY, barW * hpRatio, barH)
+
+  ctx.fillStyle = '#fff'
+  ctx.font = 'bold 12px Arial'
+  ctx.textAlign = 'center'
+  ctx.fillText('BOSS', boss.x, barY - 5)
+
+  ctx.restore()
 }
 
 function gameLoop() {
-  if (!isRunning.value || gameOver.value) return
+  if (!isRunning.value || gameOver.value || showLevelComplete.value) return
 
-  bladeAngle += bladeSpeed
+  bladeAngle += bladeSpeed.value
   updateBlades()
 
+  if (invincibleTimer > 0) invincibleTimer--
+
   enemySpawnTimer++
-  if (enemySpawnTimer >= enemySpawnInterval) {
+  if (enemySpawnTimer >= enemySpawnInterval && !bossSpawned) {
     spawnEnemy()
     enemySpawnTimer = 0
   }
 
   powerupSpawnTimer++
-  if (powerupSpawnTimer >= powerupSpawnInterval) {
-    spawnPowerup()
+  if (powerupSpawnTimer >= 500) {
     powerupSpawnTimer = 0
+  }
+
+  for (let i = powerups.length - 1; i >= 0; i--) {
+    powerups[i].life--
+    if (powerups[i].life <= 0) {
+      powerups.splice(i, 1)
+    }
   }
 
   updateEnemies()
   updateParticles()
   checkCollisions()
+  checkWaveComplete()
 
   draw()
 
@@ -682,19 +1387,7 @@ function handleTouchStart(e) {
 
 function handleTouchMove(e) {
   if (!isRunning.value || !isDragging) return
-  const pos = getCanvasPos(e)
-  const dx = pos.x - dragStartX
-  const dy = pos.y - dragStartY
-
-  let newX = playerStartX + dx
-  let newY = playerStartY + dy
-
-  newX = Math.max(player.radius, Math.min(canvasWidth.value - player.radius, newX))
-  newY = Math.max(player.radius, Math.min(canvasHeight.value - player.radius, newY))
-
-  player.x = newX
-  player.y = newY
-  updateBlades()
+  movePlayer(getCanvasPos(e))
 }
 
 function handleTouchEnd() {
@@ -713,23 +1406,39 @@ function handleMouseDown(e) {
 
 function handleMouseMove(e) {
   if (!isRunning.value || !isDragging) return
-  const pos = getCanvasPos(e)
-  const dx = pos.x - dragStartX
-  const dy = pos.y - dragStartY
-
-  let newX = playerStartX + dx
-  let newY = playerStartY + dy
-
-  newX = Math.max(player.radius, Math.min(canvasWidth.value - player.radius, newX))
-  newY = Math.max(player.radius, Math.min(canvasHeight.value - player.radius, newY))
-
-  player.x = newX
-  player.y = newY
-  updateBlades()
+  movePlayer(getCanvasPos(e))
 }
 
 function handleMouseUp() {
   isDragging = false
+}
+
+function movePlayer(pos) {
+  const dx = pos.x - dragStartX
+  const dy = pos.y - dragStartY
+
+  let newX = playerStartX + dx * playerSpeed.value
+  let newY = playerStartY + dy * playerSpeed.value
+
+  newX = Math.max(player.radius, Math.min(canvasWidth.value - player.radius, newX))
+  newY = Math.max(player.radius, Math.min(canvasHeight.value - player.radius, newY))
+
+  for (const obs of obstacles) {
+    const odx = newX - obs.x
+    const ody = newY - obs.y
+    const odist = Math.sqrt(odx * odx + ody * ody)
+    const minDist = player.radius + obs.radius
+
+    if (odist < minDist) {
+      const angle = Math.atan2(ody, odx)
+      newX = obs.x + Math.cos(angle) * minDist
+      newY = obs.y + Math.sin(angle) * minDist
+    }
+  }
+
+  player.x = newX
+  player.y = newY
+  updateBlades()
 }
 
 function handleKeydown(e) {
@@ -737,7 +1446,6 @@ function handleKeydown(e) {
     e.preventDefault()
     toggleGame()
   }
-
   if (e.key === 'r' || e.key === 'R') {
     e.preventDefault()
     resetGame()
@@ -747,7 +1455,7 @@ function handleKeydown(e) {
 function resizeCanvas() {
   const screenWidth = Math.min(window.innerWidth - 40, 400)
   canvasWidth.value = screenWidth
-  canvasHeight.value = screenWidth * 1.3
+  canvasHeight.value = screenWidth * 1.4
 
   if (canvasRef.value) {
     const dpr = window.devicePixelRatio || 1
@@ -785,7 +1493,7 @@ onUnmounted(() => {
 
 <style scoped>
 .game-blade {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -797,107 +1505,269 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: 12px 16px;
 }
 
-.back-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
+.back-btn,
+.reset-btn {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
   display: flex;
   justify-content: center;
   align-items: center;
   cursor: pointer;
-  backdrop-filter: blur(10px);
   transition: all 0.2s ease;
+}
+
+.back-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.reset-btn {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 13px;
 }
 
 .back-btn:active,
 .reset-btn:active {
   transform: scale(0.9);
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .game-title {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 800;
   color: white;
 }
 
-.reset-btn {
-  padding: 10px 20px;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
-  color: white;
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-  backdrop-filter: blur(10px);
-  transition: all 0.2s ease;
-}
-
-.score-row {
+.status-bar {
   display: flex;
-  gap: 10px;
-  margin-bottom: 16px;
-  padding: 0 20px;
+  gap: 8px;
+  padding: 0 16px 8px;
+  width: 100%;
 }
 
-.score-row .score-display {
-  min-width: 80px;
-  padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.15);
+.status-item {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
-  border-radius: 12px;
+  border-radius: 10px;
+  padding: 8px 10px;
   text-align: center;
   color: white;
 }
 
-.score-row .score-label {
-  font-size: 11px;
-  opacity: 0.8;
-  margin-bottom: 4px;
+.status-label {
+  font-size: 10px;
+  opacity: 0.7;
 }
 
-.score-row .score-value {
-  font-size: 20px;
+.status-value {
+  font-size: 16px;
   font-weight: 700;
+}
+
+.status-value.level {
+  color: #fbbf24;
+  font-size: 18px;
+}
+
+.mission-bar {
+  width: calc(100% - 32px);
+  margin: 0 16px 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.mission-text {
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.mission-progress-wrap {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.mission-progress {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #84cc16);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.stat-row {
+  display: flex;
+  gap: 6px;
+  padding: 0 16px 10px;
+  width: 100%;
+}
+
+.stat-item {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 6px 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-icon {
+  font-size: 16px;
+}
+
+.stat-info {
+  flex: 1;
+}
+
+.stat-label {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.stat-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: white;
 }
 
 .game-canvas-wrapper {
   padding: 0;
+  position: relative;
 }
 
 .game-canvas {
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   touch-action: none;
   user-select: none;
 }
 
-.game-status {
-  margin-top: 12px;
+.game-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(5px);
+}
+
+.overlay-content {
+  background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 30px 40px;
   text-align: center;
   color: white;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 
-.status-text {
-  font-size: 24px;
-  font-weight: 700;
-  margin-bottom: 6px;
+.overlay-title {
+  font-size: 28px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  color: #fbbf24;
 }
 
-.status-score {
+.overlay-title.gameover {
+  color: #ef4444;
+}
+
+.overlay-score {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.overlay-level {
+  font-size: 14px;
+  opacity: 0.8;
+  margin-bottom: 20px;
+}
+
+.overlay-bonus {
   font-size: 16px;
-  opacity: 0.9;
+  color: #22c55e;
+  margin-bottom: 16px;
+}
+
+.overlay-desc {
+  font-size: 14px;
+  opacity: 0.8;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.overlay-btn {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  border: none;
+  padding: 12px 36px;
+  border-radius: 25px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+}
+
+.overlay-btn.start {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+}
+
+.overlay-btn:active {
+  transform: scale(0.95);
+}
+
+.buff-bar {
+  position: fixed;
+  top: 160px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 10;
+}
+
+.buff-item {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 4px 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: white;
+  font-size: 11px;
+}
+
+.buff-icon {
+  font-size: 12px;
+}
+
+.buff-name {
+  font-weight: 600;
 }
 
 .control-panel {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .control-btn {
@@ -905,36 +1775,37 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 14px 40px;
-  border-radius: 30px;
+  padding: 12px 32px;
+  border-radius: 25px;
   border: none;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .start-btn {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
   color: white;
-  box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+  box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
 }
 
-.start-btn.pause {
+.pause-btn {
   background: linear-gradient(135deg, #ffa751 0%, #ffe259 100%);
+  color: #78350f;
   box-shadow: 0 4px 15px rgba(255, 167, 81, 0.4);
 }
 
-.start-btn:active {
+.control-btn:active {
   transform: scale(0.95);
 }
 
 .game-tip {
-  margin-top: 12px;
+  margin-top: 10px;
   padding: 0 20px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
   padding-bottom: calc(20px + env(safe-area-inset-bottom));
 }
 
