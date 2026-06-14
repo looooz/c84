@@ -541,12 +541,28 @@ function handleKeydown(e) {
   }
 }
 
+function getSafeAreaBottom() {
+  return parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-bottom')) || 0
+}
+
 function resizeCanvas() {
-  const screenWidth = Math.min(window.innerWidth - 40, 400)
+  const screenWidth = window.innerWidth
   const screenHeight = window.innerHeight
-  const maxH = Math.min(screenHeight - 340, 550)
+
+  const headerH = 76
+  const scoreRowH = 80
+  const statusH = gameOver.value || (!isRunning.value && score.value > 0) ? 50 : 0
+  const controlH = 70
+  const tipsH = 60
+  const marginsH = 32
+  const safeBottom = getSafeAreaBottom()
+  const occupiedH = headerH + scoreRowH + statusH + controlH + tipsH + marginsH + safeBottom
+
+  const maxH = Math.max(300, screenHeight - occupiedH)
+  const maxW = Math.min(screenWidth - 40, screenHeight * 0.7)
+
   const ratio = 360 / 500
-  let w = screenWidth
+  let w = maxW
   let h = w / ratio
   if (h > maxH) {
     h = maxH
@@ -726,7 +742,9 @@ onUnmounted(() => {
 
 .tips {
   margin-top: 12px;
-  padding-bottom: calc(30px + env(safe-area-inset-bottom));
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-bottom: calc(40px + env(safe-area-inset-bottom));
 }
 
 .tip-text {

@@ -35,24 +35,24 @@
 
     <div class="direction-buttons">
       <div class="dir-row">
-        <button class="dir-btn" @click="move('up')">
-          <el-icon :size="24"><ArrowUp /></el-icon>
+        <button class="dir-btn" @click="move('up')" @touchstart.prevent="move('up')">
+          <el-icon :size="28"><ArrowUp /></el-icon>
         </button>
       </div>
       <div class="dir-row">
-        <button class="dir-btn" @click="move('left')">
-          <el-icon :size="24"><ArrowLeft /></el-icon>
+        <button class="dir-btn" @click="move('left')" @touchstart.prevent="move('left')">
+          <el-icon :size="28"><ArrowLeft /></el-icon>
         </button>
-        <button class="dir-btn center-btn" @click="newGame">
-          <el-icon :size="24"><Refresh /></el-icon>
+        <button class="dir-btn center-btn" @click="newGame" @touchstart.prevent="newGame">
+          <el-icon :size="28"><Refresh /></el-icon>
         </button>
-        <button class="dir-btn" @click="move('right')">
-          <el-icon :size="24"><ArrowRight /></el-icon>
+        <button class="dir-btn" @click="move('right')" @touchstart.prevent="move('right')">
+          <el-icon :size="28"><ArrowRight /></el-icon>
         </button>
       </div>
       <div class="dir-row">
-        <button class="dir-btn" @click="move('down')">
-          <el-icon :size="24"><ArrowDown /></el-icon>
+        <button class="dir-btn" @click="move('down')" @touchstart.prevent="move('down')">
+          <el-icon :size="28"><ArrowDown /></el-icon>
         </button>
       </div>
     </div>
@@ -718,32 +718,38 @@ onUnmounted(() => {
 }
 
 .direction-buttons {
-  margin-top: 24px;
+  margin-top: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding-bottom: 20px;
+  gap: 14px;
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-bottom: calc(40px + env(safe-area-inset-bottom));
 }
 
 .dir-row {
   display: flex;
-  gap: 8px;
+  gap: 18px;
 }
 
 .dir-btn {
-  width: 60px;
-  height: 60px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
+  background: rgba(255, 255, 255, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.3);
   color: white;
   display: flex;
   justify-content: center;
   align-items: center;
   cursor: pointer;
   backdrop-filter: blur(10px);
-  transition: all 0.15s ease;
+  transition: all 0.1s ease;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .dir-btn:active {
@@ -753,5 +759,9 @@ onUnmounted(() => {
 
 .center-btn {
   background: rgba(255, 255, 255, 0.3);
+}
+
+.center-btn:active {
+  background: rgba(255, 255, 255, 0.5);
 }
 </style>
