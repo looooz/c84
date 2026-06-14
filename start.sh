@@ -21,14 +21,14 @@ fi
 echo "创建数据库目录..."
 mkdir -p "$BACKEND_DIR/database"
 
-echo "启动后端服务 (端口: 3000)..."
+echo "启动后端服务 (端口: 3084)..."
 cd "$BACKEND_DIR" && nohup npm start > backend.log 2>&1 &
 BACKEND_PID=$!
 echo "后端服务已启动，PID: $BACKEND_PID"
 
 sleep 2
 
-echo "启动前端服务 (端口: 5173)..."
+echo "启动前端服务 (端口: 5184)..."
 cd "$FRONTEND_DIR" && nohup npm run dev > frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo "前端服务已启动，PID: $FRONTEND_PID"
@@ -37,9 +37,9 @@ echo ""
 echo "=========================================="
 echo "  服务启动完成！"
 echo "=========================================="
-echo "  后端服务: http://localhost:3000"
-echo "  前端服务: http://localhost:5173"
-echo "  手机访问: http://\$(hostname -I | cut -d' ' -f1):5173"
+echo "  后端服务: http://localhost:3084"
+echo "  前端服务: http://localhost:5184"
+echo "  手机访问: http://\$(hostname -I | cut -d' ' -f1):5184"
 echo ""
 echo "  停止服务: ./stop.sh"
 echo "  查看后端日志: tail -f $BACKEND_DIR/backend.log"

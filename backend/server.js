@@ -4,7 +4,7 @@ const cors = require('cors');
 const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3084;
 
 app.use(cors());
 app.use(express.json());
@@ -31,7 +31,7 @@ function initDatabase() {
       console.error('创建表失败:', err.message);
     } else {
       console.log('high_scores 表已就绪');
-      const games = ['2048', 'snake', 'tetris', 'bigfish'];
+      const games = ['2048', 'snake', 'tetris', 'bigfish', 'blade'];
       games.forEach(game => {
         db.get('SELECT * FROM high_scores WHERE game_name = ?', [game], (err, row) => {
           if (!row) {

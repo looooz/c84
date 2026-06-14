@@ -40,6 +40,12 @@ const routes = [
     name: 'GameBigFish',
     component: () => import('../views/GameBigFish.vue'),
     meta: { title: '大鱼吃小鱼' }
+  },
+  {
+    path: '/game/blade',
+    name: 'GameBlade',
+    component: () => import('../views/GameBlade.vue'),
+    meta: { title: '转刀割草' }
   }
 ]
 

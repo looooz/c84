@@ -110,6 +110,14 @@ const games = [
     icon: '🐟',
     iconBg: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
     route: '/game/bigfish'
+  },
+  {
+    id: 5,
+    key: 'blade',
+    name: '转刀割草',
+    icon: '⚔️',
+    iconBg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    route: '/game/blade'
   }
 ]
 
