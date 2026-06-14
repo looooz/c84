@@ -227,6 +227,7 @@ export class TankGame {
     if (this.enemiesKilled >= this.totalEnemies && this.enemies.length === 0) {
       this.levelComplete = true
       this.isPaused = true
+      this.notifyStateChange()
     }
 
     if (this.baseDestroyed) {

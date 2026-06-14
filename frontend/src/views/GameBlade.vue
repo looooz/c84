@@ -1403,10 +1403,30 @@ function getCanvasPos(e) {
   }
 }
 
+function getCanvasScreenPos(e) {
+  const rect = canvasRef.value.getBoundingClientRect()
+  const scaleX = canvasWidth.value / rect.width
+  const scaleY = canvasHeight.value / rect.height
+
+  let clientX, clientY
+  if (e.touches && e.touches.length > 0) {
+    clientX = e.touches[0].clientX
+    clientY = e.touches[0].clientY
+  } else {
+    clientX = e.clientX
+    clientY = e.clientY
+  }
+
+  return {
+    x: (clientX - rect.left) * scaleX,
+    y: (clientY - rect.top) * scaleY
+  }
+}
+
 function handleTouchStart(e) {
   if (!isRunning.value) return
   isDragging = true
-  const pos = getCanvasPos(e)
+  const pos = getCanvasScreenPos(e)
   dragStartX = pos.x
   dragStartY = pos.y
   playerStartX = player.x
@@ -1415,7 +1435,7 @@ function handleTouchStart(e) {
 
 function handleTouchMove(e) {
   if (!isRunning.value || !isDragging) return
-  movePlayer(getCanvasPos(e))
+  movePlayer(getCanvasScreenPos(e))
 }
 
 function handleTouchEnd() {
@@ -1425,7 +1445,7 @@ function handleTouchEnd() {
 function handleMouseDown(e) {
   if (!isRunning.value) return
   isDragging = true
-  const pos = getCanvasPos(e)
+  const pos = getCanvasScreenPos(e)
   dragStartX = pos.x
   dragStartY = pos.y
   playerStartX = player.x
@@ -1434,7 +1454,7 @@ function handleMouseDown(e) {
 
 function handleMouseMove(e) {
   if (!isRunning.value || !isDragging) return
-  movePlayer(getCanvasPos(e))
+  movePlayer(getCanvasScreenPos(e))
 }
 
 function handleMouseUp() {

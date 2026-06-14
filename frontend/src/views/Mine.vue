@@ -87,6 +87,34 @@ const games = [
     icon: '🐍',
     iconBg: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
     route: '/game/snake'
+  },
+  {
+    key: 'tetris',
+    name: '俄罗斯方块',
+    icon: '🧱',
+    iconBg: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+    route: '/game/tetris'
+  },
+  {
+    key: 'bigfish',
+    name: '大鱼吃小鱼',
+    icon: '🐟',
+    iconBg: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+    route: '/game/bigfish'
+  },
+  {
+    key: 'blade',
+    name: '转刀割草',
+    icon: '⚔️',
+    iconBg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    route: '/game/blade'
+  },
+  {
+    key: 'tank',
+    name: '坦克大战',
+    icon: '🎮',
+    iconBg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+    route: '/game/tank'
   }
 ]
 
