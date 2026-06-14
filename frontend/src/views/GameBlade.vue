@@ -81,6 +81,7 @@
     <div class="game-overlay" v-if="showLevelComplete">
       <div class="overlay-content">
         <div class="overlay-title">🎉 关卡完成！</div>
+        <div class="overlay-subtitle">{{ currentTheme.name }}</div>
         <div class="overlay-score">得分：{{ score }}</div>
         <div class="overlay-bonus" v-if="levelBonus">关卡奖励：+{{ levelBonus }}分</div>
         <button class="overlay-btn" @click="nextLevel">下一关</button>
@@ -139,6 +140,56 @@ const submitScore = inject('submitScore')
 const highScores = inject('highScores')
 const loadHighScores = inject('loadHighScores')
 
+const THEMES = [
+  {
+    id: 'grassland', name: '翡翠草原',
+    bgTop: '#1a4d2e', bgBottom: '#0d2818',
+    groundColor: '#22c55e', groundAlpha: 0.3,
+    obstacleTypes: ['rock', 'tree'],
+    particleType: 'firefly', particleColor: '#a3e635',
+    bossColor: '#ef4444', hazardType: null,
+    fogColor: 'rgba(34,197,94,0.03)', accentColor: '#22c55e'
+  },
+  {
+    id: 'desert', name: '灼热沙漠',
+    bgTop: '#78350f', bgBottom: '#451a03',
+    groundColor: '#d4a437', groundAlpha: 0.25,
+    obstacleTypes: ['cactus', 'rock'],
+    particleType: 'sand', particleColor: '#fbbf24',
+    bossColor: '#f97316', hazardType: 'sandstorm',
+    fogColor: 'rgba(251,191,36,0.04)', accentColor: '#f59e0b'
+  },
+  {
+    id: 'snow', name: '冰霜雪原',
+    bgTop: '#1e3a5f', bgBottom: '#0c1929',
+    groundColor: '#bfdbfe', groundAlpha: 0.2,
+    obstacleTypes: ['iceberg', 'pine_tree'],
+    particleType: 'snow', particleColor: '#e0f2fe',
+    bossColor: '#60a5fa', hazardType: 'blizzard',
+    fogColor: 'rgba(191,219,254,0.05)', accentColor: '#38bdf8'
+  },
+  {
+    id: 'volcano', name: '烈焰火山',
+    bgTop: '#451a03', bgBottom: '#1c0a00',
+    groundColor: '#92400e', groundAlpha: 0.25,
+    obstacleTypes: ['lava_rock', 'dead_tree'],
+    particleType: 'ember', particleColor: '#f97316',
+    bossColor: '#dc2626', hazardType: 'lava_pool',
+    fogColor: 'rgba(220,38,38,0.04)', accentColor: '#ef4444'
+  },
+  {
+    id: 'shadow', name: '暗影深渊',
+    bgTop: '#1e1b4b', bgBottom: '#0a0a1a',
+    groundColor: '#6d28d9', groundAlpha: 0.2,
+    obstacleTypes: ['shadow_pillar', 'dark_crystal'],
+    particleType: 'wisp', particleColor: '#a78bfa',
+    bossColor: '#7c3aed', hazardType: 'void_zone',
+    fogColor: 'rgba(124,58,237,0.05)', accentColor: '#a78bfa'
+  }
+]
+
+const currentTheme = computed(() => THEMES[(level.value - 1) % THEMES.length])
+
 const canvasWidth = ref(360)
 const canvasHeight = ref(520)
 const score = ref(0)
@@ -182,12 +233,14 @@ const activeBuffs = computed(() => {
   if (bladeDamage.value > 1) buffs.push({ type: 'damage', icon: '💥', name: `x${bladeDamage.value}` })
   if (bladeRadius.value > 60) buffs.push({ type: 'range', icon: '📏', name: '范围' })
   if (playerSpeed.value > 1) buffs.push({ type: 'movespeed', icon: '👟', name: '移速' })
+  if (slowTimer > 0) buffs.push({ type: 'slow', icon: '🐢', name: '减速' })
   return buffs
 })
 
 let ctx = null
 let animationId = null
 let scoreSubmitted = false
+let gameTick = 0
 
 let player = { x: 0, y: 0, radius: 20 }
 let blades = []
@@ -203,15 +256,23 @@ let bossSpawned = false
 let bossAlive = false
 let bossHp = 0
 let bossMaxHp = 0
+let bossBullets = []
+let bossChargeTimer = 0
+let bossCharging = false
+let bossChargeTarget = { x: 0, y: 0 }
+let bulletRainAngle = 0
 
 let obstacles = []
 let chests = []
 let grassPatches = []
+let hazards = []
 
 let powerups = []
 let powerupSpawnTimer = 0
 
 let particles = []
+let envParticles = []
+let trailParticles = []
 let damageTexts = []
 
 let isDragging = false
@@ -222,6 +283,11 @@ let playerStartY = 0
 
 let screenShake = 0
 let invincibleTimer = 0
+let slowTimer = 0
+
+let levelTransitionAlpha = 0
+let levelTransitionText = ''
+let levelTransitionTimer = 0
 
 let mapWidth = 1080
 let mapHeight = 1560
@@ -265,19 +331,33 @@ function initLevel() {
   bossSpawned = false
   bossAlive = false
   boss = null
+  bossBullets = []
+  bossChargeTimer = 0
+  bossCharging = false
+  bulletRainAngle = 0
 
   enemies = []
   powerups = []
   particles = []
+  envParticles = []
+  trailParticles = []
   damageTexts = []
+  hazards = []
   enemySpawnTimer = 0
   powerupSpawnTimer = 0
   invincibleTimer = 0
+  slowTimer = 0
 
   mapWidth = canvasWidth.value * 3
   mapHeight = canvasHeight.value * 3
 
   generateMap()
+  generateHazards()
+  spawnEnvParticles()
+
+  levelTransitionAlpha = 1
+  levelTransitionText = currentTheme.value.name
+  levelTransitionTimer = 90
 
   player.x = mapWidth / 2
   player.y = mapHeight / 2
@@ -302,12 +382,14 @@ function generateMap() {
   obstacles = []
   chests = []
   grassPatches = []
+  const theme = currentTheme.value
 
   for (let i = 0; i < 15 + level.value * 3; i++) {
     const x = 30 + Math.random() * (mapWidth - 60)
     const y = 60 + Math.random() * (mapHeight - 120)
-    const type = Math.random() > 0.5 ? 'rock' : 'tree'
-    const radius = type === 'rock' ? 18 + Math.random() * 10 : 20 + Math.random() * 8
+    const types = theme.obstacleTypes
+    const type = types[Math.floor(Math.random() * types.length)]
+    const radius = 18 + Math.random() * 10
 
     if (distanceToCenter(x, y) > 80) {
       obstacles.push({ x, y, radius, type })
@@ -339,6 +421,82 @@ function generateMap() {
       size: 15 + Math.random() * 25,
       type: Math.floor(Math.random() * 3)
     })
+  }
+}
+
+function generateHazards() {
+  hazards = []
+  const theme = currentTheme.value
+  if (!theme.hazardType) return
+
+  const count = 3 + Math.floor(level.value / 2)
+  for (let i = 0; i < count; i++) {
+    let x, y
+    let attempts = 0
+    do {
+      x = 60 + Math.random() * (mapWidth - 120)
+      y = 80 + Math.random() * (mapHeight - 160)
+      attempts++
+    } while (distanceToCenter(x, y) < 120 && attempts < 20)
+
+    hazards.push({
+      x, y,
+      radius: 35 + Math.random() * 20,
+      type: theme.hazardType,
+      pulse: Math.random() * Math.PI * 2
+    })
+  }
+}
+
+function spawnEnvParticles() {
+  envParticles = []
+  const theme = currentTheme.value
+  const count = 60
+
+  for (let i = 0; i < count; i++) {
+    const p = {
+      x: Math.random() * mapWidth,
+      y: Math.random() * mapHeight,
+      radius: 2 + Math.random() * 3,
+      life: 0.5 + Math.random() * 0.5,
+      maxLife: 1,
+      vx: 0, vy: 0,
+      phase: Math.random() * Math.PI * 2,
+      wobbleAmp: 0.5 + Math.random() * 1,
+      wobbleSpeed: 0.02 + Math.random() * 0.03,
+      fadePhase: Math.random() * Math.PI * 2,
+      color: theme.particleColor
+    }
+
+    switch (theme.particleType) {
+      case 'firefly':
+        p.radius = 2 + Math.random() * 2
+        p.vx = (Math.random() - 0.5) * 0.5
+        p.vy = (Math.random() - 0.5) * 0.5
+        break
+      case 'sand':
+        p.vx = 1.5 + Math.random() * 2
+        p.vy = (Math.random() - 0.5) * 0.3
+        p.radius = 1 + Math.random() * 2
+        break
+      case 'snow':
+        p.vy = 0.5 + Math.random() * 1
+        p.radius = 2 + Math.random() * 3
+        break
+      case 'ember':
+        p.vy = -(0.5 + Math.random() * 1.5)
+        p.vx = (Math.random() - 0.5) * 1
+        p.radius = 1.5 + Math.random() * 2
+        p.life = 0.3 + Math.random() * 0.7
+        break
+      case 'wisp':
+        p.vx = (Math.random() - 0.5) * 0.3
+        p.vy = (Math.random() - 0.5) * 0.3
+        p.radius = 3 + Math.random() * 4
+        break
+    }
+
+    envParticles.push(p)
   }
 }
 
@@ -413,9 +571,15 @@ function spawnEnemy() {
 
 function getEnemyTypesForLevel() {
   const types = ['normal']
+  const theme = currentTheme.value
   if (level.value >= 2) types.push('fast')
   if (level.value >= 3) types.push('tank')
   if (level.value >= 4) types.push('ranged')
+
+  if (theme.id === 'snow') types.push('frost')
+  if (theme.id === 'shadow') types.push('ghost')
+  if (theme.id === 'volcano') types.push('lava')
+
   if (level.value >= 5) types.push('fast', 'tank')
   return types
 }
@@ -459,6 +623,33 @@ function createEnemy(x, y, type) {
       enemy.attackTimer = 0
       enemy.attackInterval = 120
       break
+    case 'frost':
+      enemy.radius = 15
+      enemy.speed = 1.0 * levelMult
+      enemy.hp = Math.ceil(2 * levelMult)
+      enemy.maxHp = enemy.hp
+      enemy.color = '#7dd3fc'
+      enemy.score = 20
+      break
+    case 'ghost':
+      enemy.radius = 14
+      enemy.speed = 1.3 * levelMult
+      enemy.hp = Math.ceil(2 * levelMult)
+      enemy.maxHp = enemy.hp
+      enemy.color = '#c4b5fd'
+      enemy.score = 25
+      enemy.phased = false
+      enemy.phaseTimer = 0
+      enemy.phaseInterval = 90 + Math.floor(Math.random() * 60)
+      break
+    case 'lava':
+      enemy.radius = 16
+      enemy.speed = 1.1 * levelMult
+      enemy.hp = Math.ceil(3 * levelMult)
+      enemy.maxHp = enemy.hp
+      enemy.color = '#f97316'
+      enemy.score = 30
+      break
   }
 
   return enemy
@@ -473,6 +664,7 @@ function spawnBoss() {
   bossMaxHp = Math.ceil(50 * levelMult)
   bossHp = bossMaxHp
 
+  const theme = currentTheme.value
   boss = {
     x: cameraX + canvasWidth.value / 2,
     y: cameraY - 60,
@@ -482,8 +674,84 @@ function spawnBoss() {
     phase: 1,
     attackTimer: 0,
     attackPattern: 0,
-    color: '#ef4444',
-    score: 500 * level.value
+    color: theme.bossColor,
+    score: 500 * level.value,
+    chargeSpeed: 4
+  }
+}
+
+function updateBossPhase() {
+  if (!boss || !bossAlive) return
+  const hpRatio = bossHp / bossMaxHp
+  if (hpRatio <= 0.33) boss.phase = 3
+  else if (hpRatio <= 0.66) boss.phase = 2
+  else boss.phase = 1
+}
+
+function bossAttack() {
+  if (!boss || !bossAlive) return
+  const angle = Math.atan2(player.y - boss.y, player.x - boss.x)
+  const theme = currentTheme.value
+
+  const spreadCount = boss.phase === 1 ? 3 : boss.phase === 2 ? 5 : 7
+  const spreadAngle = boss.phase === 1 ? 0.3 : boss.phase === 2 ? 0.25 : 0.2
+  for (let i = 0; i < spreadCount; i++) {
+    const a = angle - spreadAngle * (spreadCount - 1) / 2 + spreadAngle * i
+    bossBullets.push({
+      x: boss.x, y: boss.y,
+      vx: Math.cos(a) * 3, vy: Math.sin(a) * 3,
+      radius: 5, color: theme.bossColor, life: 300
+    })
+  }
+
+  if (boss.phase >= 2) {
+    bossChargeTimer = 30
+    bossChargeTarget = { x: player.x, y: player.y }
+    bossCharging = true
+  }
+
+  if (boss.phase >= 3) {
+    bulletRainAngle += 0.15
+    for (let i = 0; i < 8; i++) {
+      const a = bulletRainAngle + (Math.PI * 2 / 8) * i
+      bossBullets.push({
+        x: boss.x, y: boss.y,
+        vx: Math.cos(a) * 2.5, vy: Math.sin(a) * 2.5,
+        radius: 4, color: theme.accentColor, life: 200
+      })
+    }
+  }
+}
+
+function updateBossBullets() {
+  for (let i = bossBullets.length - 1; i >= 0; i--) {
+    const b = bossBullets[i]
+    b.x += b.vx
+    b.y += b.vy
+    b.life--
+
+    if (b.life <= 0 || b.x < -50 || b.x > mapWidth + 50 || b.y < -50 || b.y > mapHeight + 50) {
+      bossBullets.splice(i, 1)
+      continue
+    }
+
+    const dx = b.x - player.x
+    const dy = b.y - player.y
+    const dist = Math.sqrt(dx * dx + dy * dy)
+
+    if (dist < player.radius + b.radius) {
+      if (invincibleTimer <= 0) {
+        playerHp.value--
+        invincibleTimer = 60
+        screenShake = 8
+        addParticles(player.x, player.y, '#ef4444', 10)
+        if (playerHp.value <= 0) {
+          endGame()
+          return
+        }
+      }
+      bossBullets.splice(i, 1)
+    }
   }
 }
 
@@ -597,9 +865,22 @@ function addDamageText(x, y, text, color = '#fff') {
   })
 }
 
+function addTrailParticle() {
+  const theme = currentTheme.value
+  trailParticles.push({
+    x: player.x + (Math.random() - 0.5) * 8,
+    y: player.y + (Math.random() - 0.5) * 8,
+    radius: 2 + Math.random() * 3,
+    color: theme.accentColor,
+    life: 1
+  })
+}
+
 function checkCollisions() {
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemies[i]
+
+    if (enemy.type === 'ghost' && enemy.phased) continue
 
     const dx = enemy.x - player.x
     const dy = enemy.y - player.y
@@ -612,6 +893,10 @@ function checkCollisions() {
         screenShake = 10
         addParticles(player.x, player.y, '#ef4444', 15)
 
+        if (enemy.type === 'frost') {
+          slowTimer = 120
+        }
+
         if (playerHp.value <= 0) {
           endGame()
           return
@@ -619,20 +904,19 @@ function checkCollisions() {
       }
     }
 
-    let hitByBlade = false
-    for (let j = 0; j < blades.length; j++) {
-      if (isBladeHittingEnemy(blades[j], enemy)) {
-        enemy.hp -= bladeDamage.value
-        hitByBlade = true
+    if (enemy.type !== 'ghost' || !enemy.phased) {
+      for (let j = 0; j < blades.length; j++) {
+        if (isBladeHittingEnemy(blades[j], enemy)) {
+          enemy.hp -= bladeDamage.value
 
-        const angle = Math.atan2(enemy.y - player.y, enemy.x - player.x)
-        enemy.x += Math.cos(angle) * 3
-        enemy.y += Math.sin(angle) * 3
+          const angle = Math.atan2(enemy.y - player.y, enemy.x - player.x)
+          enemy.x += Math.cos(angle) * 3
+          enemy.y += Math.sin(angle) * 3
 
-        addParticles(enemy.x, enemy.y, enemy.color, 4)
-        addDamageText(enemy.x, enemy.y - enemy.radius, `-${bladeDamage.value}`, '#fff')
-
-        break
+          addParticles(enemy.x, enemy.y, enemy.color, 4)
+          addDamageText(enemy.x, enemy.y - enemy.radius, `-${bladeDamage.value}`, '#fff')
+          break
+        }
       }
     }
 
@@ -640,6 +924,25 @@ function checkCollisions() {
       score.value += enemy.score
       waveEnemiesKilled.value++
       addParticles(enemy.x, enemy.y, enemy.color, 12)
+
+      if (enemy.type === 'lava') {
+        for (let s = 0; s < 2; s++) {
+          const offsetAngle = Math.random() * Math.PI * 2
+          const offsetDist = 15
+          const small = createEnemy(
+            enemy.x + Math.cos(offsetAngle) * offsetDist,
+            enemy.y + Math.sin(offsetAngle) * offsetDist,
+            'fast'
+          )
+          small.radius = 8
+          small.color = '#fdba74'
+          small.hp = 1
+          small.maxHp = 1
+          small.score = 5
+          enemies.push(small)
+        }
+        addParticles(enemy.x, enemy.y, '#f97316', 8)
+      }
 
       if (Math.random() < 0.15) {
         spawnPowerup(enemy.x, enemy.y)
@@ -654,7 +957,7 @@ function checkCollisions() {
       if (isBladeHittingEnemy(blades[j], boss)) {
         bossHp -= bladeDamage.value * 0.5
         addParticles(boss.x + (Math.random() - 0.5) * boss.radius,
-                     boss.y + (Math.random() - 0.5) * boss.radius, '#ef4444', 3)
+                     boss.y + (Math.random() - 0.5) * boss.radius, boss.color, 3)
         break
       }
     }
@@ -681,7 +984,7 @@ function checkCollisions() {
       bossAlive = false
       score.value += boss.score
       screenShake = 20
-      addParticles(boss.x, boss.y, '#ef4444', 40)
+      addParticles(boss.x, boss.y, boss.color, 40)
       addParticles(boss.x, boss.y, '#fbbf24', 30)
 
       for (let i = 0; i < 4; i++) {
@@ -693,6 +996,7 @@ function checkCollisions() {
       }
 
       boss = null
+      bossBullets = []
 
       setTimeout(() => {
         completeLevel()
@@ -771,13 +1075,22 @@ function pointToLineDistance(px, py, x1, y1, x2, y2) {
 
 function updateEnemies() {
   for (const enemy of enemies) {
+    if (enemy.type === 'ghost') {
+      enemy.phaseTimer++
+      if (enemy.phaseTimer >= enemy.phaseInterval) {
+        enemy.phased = !enemy.phased
+        enemy.phaseTimer = 0
+      }
+    }
+
     const dx = player.x - enemy.x
     const dy = player.y - enemy.y
     const dist = Math.sqrt(dx * dx + dy * dy)
 
     if (dist > 0) {
-      const moveX = (dx / dist) * enemy.speed
-      const moveY = (dy / dist) * enemy.speed
+      let spd = enemy.speed
+      const moveX = (dx / dist) * spd
+      const moveY = (dy / dist) * spd
 
       let newX = enemy.x + moveX
       let newY = enemy.y + moveY
@@ -797,26 +1110,133 @@ function updateEnemies() {
         enemy.x = newX
         enemy.y = newY
       } else {
-        if (dy !== 0) enemy.y += (dy / Math.abs(dy)) * enemy.speed * 0.5
-        if (dx !== 0) enemy.x += (dx / Math.abs(dx)) * enemy.speed * 0.5
+        if (dy !== 0) enemy.y += (dy / Math.abs(dy)) * spd * 0.5
+        if (dx !== 0) enemy.x += (dx / Math.abs(dx)) * spd * 0.5
       }
     }
   }
 
   if (boss && bossAlive) {
-    const dx = player.x - boss.x
-    const dy = player.y - boss.y
-    const dist = Math.sqrt(dx * dx + dy * dy)
+    updateBossPhase()
 
-    if (dist > 100) {
-      boss.x += (dx / dist) * boss.speed
-      boss.y += (dy / dist) * boss.speed
+    if (bossCharging) {
+      const cdx = bossChargeTarget.x - boss.x
+      const cdy = bossChargeTarget.y - boss.y
+      const cdist = Math.sqrt(cdx * cdx + cdy * cdy)
+      if (cdist > 10) {
+        boss.x += (cdx / cdist) * boss.chargeSpeed
+        boss.y += (cdy / cdist) * boss.chargeSpeed
+      } else {
+        bossCharging = false
+      }
+      bossChargeTimer--
+      if (bossChargeTimer <= 0) bossCharging = false
     } else {
+      const dx = player.x - boss.x
+      const dy = player.y - boss.y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+
+      if (dist > 100) {
+        boss.x += (dx / dist) * boss.speed
+        boss.y += (dy / dist) * boss.speed
+      }
+
       boss.attackTimer++
-      if (boss.attackTimer >= 60) {
+      const attackInterval = boss.phase === 3 ? 40 : boss.phase === 2 ? 60 : 80
+      if (boss.attackTimer >= attackInterval) {
         boss.attackTimer = 0
+        bossAttack()
         screenShake = 5
       }
+    }
+  }
+}
+
+function updateEnvParticles() {
+  const theme = currentTheme.value
+  for (const p of envParticles) {
+    switch (theme.particleType) {
+      case 'firefly':
+        p.phase += 0.03
+        p.x += p.vx + Math.sin(p.phase) * 0.3
+        p.y += p.vy + Math.cos(p.phase) * 0.3
+        p.life = 0.3 + Math.abs(Math.sin(p.phase)) * 0.7
+        break
+      case 'sand':
+        p.x += p.vx
+        p.y += p.vy + Math.sin(gameTick * 0.01 + p.phase) * 0.2
+        if (p.x > mapWidth + 10) p.x = -10
+        if (p.x < -10) p.x = mapWidth + 10
+        break
+      case 'snow':
+        p.x += Math.sin(gameTick * p.wobbleSpeed + p.phase) * p.wobbleAmp
+        p.y += p.vy
+        if (p.y > mapHeight + 10) {
+          p.y = -10
+          p.x = Math.random() * mapWidth
+        }
+        break
+      case 'ember':
+        p.x += p.vx + Math.sin(gameTick * 0.02 + p.phase) * 0.5
+        p.y += p.vy
+        p.life -= 0.003
+        if (p.life <= 0 || p.y < -10) {
+          p.x = Math.random() * mapWidth
+          p.y = mapHeight + 10
+          p.life = 0.5 + Math.random() * 0.5
+          p.vy = -(0.5 + Math.random() * 1.5)
+        }
+        break
+      case 'wisp':
+        p.fadePhase += 0.02
+        p.x += p.vx + Math.sin(gameTick * 0.01 + p.phase) * 0.2
+        p.y += p.vy + Math.cos(gameTick * 0.01 + p.phase) * 0.2
+        p.life = 0.2 + Math.abs(Math.sin(p.fadePhase)) * 0.6
+        if (p.x < -20) p.x = mapWidth + 20
+        if (p.x > mapWidth + 20) p.x = -20
+        if (p.y < -20) p.y = mapHeight + 20
+        if (p.y > mapHeight + 20) p.y = -20
+        break
+    }
+  }
+}
+
+function updateTrailParticles() {
+  for (let i = trailParticles.length - 1; i >= 0; i--) {
+    const p = trailParticles[i]
+    p.life -= 0.04
+    p.radius *= 0.97
+    if (p.life <= 0) trailParticles.splice(i, 1)
+  }
+}
+
+function updateHazards() {
+  for (const h of hazards) {
+    h.pulse = (h.pulse + 0.05) % (Math.PI * 2)
+  }
+
+  for (const h of hazards) {
+    const dx = h.x - player.x
+    const dy = h.y - player.y
+    const dist = Math.sqrt(dx * dx + dy * dy)
+
+    if (dist < h.radius + player.radius) {
+      const theme = currentTheme.value
+      if (theme.hazardType === 'sandstorm' || theme.hazardType === 'blizzard') {
+        slowTimer = Math.max(slowTimer, 30)
+      }
+      if ((theme.hazardType === 'lava_pool' || theme.hazardType === 'void_zone') && invincibleTimer <= 0) {
+        if (gameTick % 30 === 0) {
+          playerHp.value--
+          invincibleTimer = 20
+          screenShake = 5
+          addParticles(player.x, player.y, theme.hazardType === 'lava_pool' ? '#f97316' : '#7c3aed', 8)
+          if (playerHp.value <= 0) {
+            endGame()
+          }
+        }
+      }
+      break
     }
   }
 }
@@ -895,29 +1315,37 @@ function draw() {
 
   drawBackground()
   drawGrass()
+  drawHazards()
   drawObstacles()
   drawChests()
+  drawEnvParticles()
+  drawTrailParticles()
   drawPowerups()
   drawParticles()
   drawEnemies()
   drawBoss()
+  drawBossBullets()
   drawBlades()
   drawPlayer()
   drawDamageTexts()
+  drawFog()
 
   ctx.strokeStyle = 'rgba(255, 100, 100, 0.3)'
   ctx.lineWidth = 3
   ctx.strokeRect(0, 0, mapWidth, mapHeight)
 
   ctx.restore()
+
+  drawLevelTransition()
 }
 
 function drawBackground() {
+  const theme = currentTheme.value
   const sx = Math.floor(cameraX / TILE_SIZE) * TILE_SIZE
   const sy = Math.floor(cameraY / TILE_SIZE) * TILE_SIZE
   const gradient = ctx.createLinearGradient(sx, sy, sx, sy + canvasHeight.value)
-  gradient.addColorStop(0, '#1a4d2e')
-  gradient.addColorStop(1, '#0d2818')
+  gradient.addColorStop(0, theme.bgTop)
+  gradient.addColorStop(1, theme.bgBottom)
   ctx.fillStyle = gradient
   ctx.fillRect(sx, sy, canvasWidth.value, canvasHeight.value)
 
@@ -938,13 +1366,82 @@ function drawBackground() {
 }
 
 function drawGrass() {
+  const theme = currentTheme.value
   for (const grass of grassPatches) {
     ctx.save()
-    ctx.globalAlpha = 0.3
-    ctx.fillStyle = '#22c55e'
+    ctx.globalAlpha = theme.groundAlpha
+    ctx.fillStyle = theme.groundColor
     ctx.beginPath()
     ctx.arc(grass.x, grass.y, grass.size, 0, Math.PI * 2)
     ctx.fill()
+    ctx.restore()
+  }
+}
+
+function drawHazards() {
+  for (const h of hazards) {
+    ctx.save()
+    const pulseScale = 1 + Math.sin(h.pulse) * 0.1
+    const r = h.radius * pulseScale
+
+    if (h.type === 'sandstorm') {
+      ctx.globalAlpha = 0.15 + Math.sin(h.pulse) * 0.05
+      ctx.fillStyle = '#fbbf24'
+      ctx.beginPath()
+      ctx.arc(h.x, h.y, r, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.globalAlpha = 0.25
+      ctx.strokeStyle = '#f59e0b'
+      ctx.lineWidth = 2
+      ctx.setLineDash([5, 5])
+      ctx.beginPath()
+      ctx.arc(h.x, h.y, r, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.setLineDash([])
+    } else if (h.type === 'blizzard') {
+      ctx.globalAlpha = 0.2 + Math.sin(h.pulse) * 0.08
+      ctx.fillStyle = '#bfdbfe'
+      ctx.beginPath()
+      ctx.arc(h.x, h.y, r, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.globalAlpha = 0.3
+      ctx.strokeStyle = '#93c5fd'
+      ctx.lineWidth = 2
+      ctx.setLineDash([4, 4])
+      ctx.beginPath()
+      ctx.arc(h.x, h.y, r, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.setLineDash([])
+    } else if (h.type === 'lava_pool') {
+      const glow = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, r)
+      glow.addColorStop(0, 'rgba(239,68,68,0.4)')
+      glow.addColorStop(0.6, 'rgba(249,115,22,0.25)')
+      glow.addColorStop(1, 'rgba(239,68,68,0)')
+      ctx.fillStyle = glow
+      ctx.beginPath()
+      ctx.arc(h.x, h.y, r, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.globalAlpha = 0.4 + Math.sin(h.pulse * 2) * 0.15
+      ctx.fillStyle = '#ef4444'
+      ctx.beginPath()
+      ctx.arc(h.x, h.y, r * 0.6, 0, Math.PI * 2)
+      ctx.fill()
+    } else if (h.type === 'void_zone') {
+      const glow = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, r)
+      glow.addColorStop(0, 'rgba(124,58,237,0.4)')
+      glow.addColorStop(0.6, 'rgba(139,92,246,0.2)')
+      glow.addColorStop(1, 'rgba(124,58,237,0)')
+      ctx.fillStyle = glow
+      ctx.beginPath()
+      ctx.arc(h.x, h.y, r, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.globalAlpha = 0.3 + Math.sin(h.pulse * 1.5) * 0.15
+      ctx.fillStyle = '#7c3aed'
+      ctx.beginPath()
+      ctx.arc(h.x, h.y, r * 0.5, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
     ctx.restore()
   }
 }
@@ -972,7 +1469,7 @@ function drawObstacles() {
       ctx.beginPath()
       ctx.arc(obs.x - obs.radius * 0.3, obs.y - obs.radius * 0.3, obs.radius * 0.3, 0, Math.PI * 2)
       ctx.fill()
-    } else {
+    } else if (obs.type === 'tree') {
       ctx.fillStyle = '#78350f'
       ctx.fillRect(obs.x - 4, obs.y, 8, obs.radius * 0.6)
 
@@ -994,6 +1491,133 @@ function drawObstacles() {
       ctx.beginPath()
       ctx.arc(obs.x + obs.radius * 0.5, obs.y, obs.radius * 0.6, 0, Math.PI * 2)
       ctx.fill()
+    } else if (obs.type === 'cactus') {
+      ctx.fillStyle = '#15803d'
+      ctx.fillRect(obs.x - 5, obs.y - obs.radius, 10, obs.radius * 2)
+      ctx.fillRect(obs.x - obs.radius * 0.8, obs.y - obs.radius * 0.3, obs.radius * 0.5, 8)
+      ctx.fillRect(obs.x + obs.radius * 0.3, obs.y - obs.radius * 0.6, obs.radius * 0.5, 8)
+
+      ctx.strokeStyle = '#166534'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(obs.x, obs.y - obs.radius)
+      ctx.lineTo(obs.x, obs.y + obs.radius)
+      ctx.stroke()
+    } else if (obs.type === 'iceberg') {
+      ctx.fillStyle = '#93c5fd'
+      ctx.beginPath()
+      ctx.moveTo(obs.x, obs.y - obs.radius * 1.2)
+      ctx.lineTo(obs.x - obs.radius, obs.y + obs.radius * 0.4)
+      ctx.lineTo(obs.x + obs.radius, obs.y + obs.radius * 0.4)
+      ctx.closePath()
+      ctx.fill()
+
+      ctx.fillStyle = 'rgba(255,255,255,0.4)'
+      ctx.beginPath()
+      ctx.moveTo(obs.x - obs.radius * 0.2, obs.y - obs.radius * 0.8)
+      ctx.lineTo(obs.x - obs.radius * 0.6, obs.y + obs.radius * 0.2)
+      ctx.lineTo(obs.x + obs.radius * 0.1, obs.y - obs.radius * 0.1)
+      ctx.closePath()
+      ctx.fill()
+    } else if (obs.type === 'pine_tree') {
+      ctx.fillStyle = '#78350f'
+      ctx.fillRect(obs.x - 3, obs.y + obs.radius * 0.3, 6, obs.radius * 0.5)
+
+      ctx.fillStyle = '#15803d'
+      for (let layer = 0; layer < 3; layer++) {
+        const yOff = obs.y - obs.radius * 0.2 - layer * obs.radius * 0.4
+        const w = obs.radius * (1.2 - layer * 0.3)
+        ctx.beginPath()
+        ctx.moveTo(obs.x, yOff - obs.radius * 0.5)
+        ctx.lineTo(obs.x - w, yOff + obs.radius * 0.3)
+        ctx.lineTo(obs.x + w, yOff + obs.radius * 0.3)
+        ctx.closePath()
+        ctx.fill()
+      }
+    } else if (obs.type === 'lava_rock') {
+      const gradient = ctx.createRadialGradient(
+        obs.x, obs.y, 0,
+        obs.x, obs.y, obs.radius
+      )
+      gradient.addColorStop(0, '#57534e')
+      gradient.addColorStop(1, '#292524')
+      ctx.fillStyle = gradient
+      ctx.beginPath()
+      ctx.arc(obs.x, obs.y, obs.radius, 0, Math.PI * 2)
+      ctx.fill()
+
+      ctx.save()
+      ctx.shadowColor = '#ef4444'
+      ctx.shadowBlur = 12
+      ctx.fillStyle = 'rgba(239,68,68,0.4)'
+      ctx.beginPath()
+      ctx.arc(obs.x - obs.radius * 0.2, obs.y + obs.radius * 0.1, obs.radius * 0.35, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(obs.x + obs.radius * 0.3, obs.y - obs.radius * 0.2, obs.radius * 0.25, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.restore()
+    } else if (obs.type === 'dead_tree') {
+      ctx.strokeStyle = '#57534e'
+      ctx.lineWidth = 4
+      ctx.beginPath()
+      ctx.moveTo(obs.x, obs.y + obs.radius)
+      ctx.lineTo(obs.x, obs.y - obs.radius * 0.5)
+      ctx.stroke()
+
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(obs.x, obs.y - obs.radius * 0.2)
+      ctx.lineTo(obs.x - obs.radius * 0.7, obs.y - obs.radius * 0.8)
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(obs.x, obs.y - obs.radius * 0.4)
+      ctx.lineTo(obs.x + obs.radius * 0.6, obs.y - obs.radius * 0.9)
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(obs.x, obs.y)
+      ctx.lineTo(obs.x + obs.radius * 0.5, obs.y - obs.radius * 0.3)
+      ctx.stroke()
+    } else if (obs.type === 'shadow_pillar') {
+      ctx.save()
+      ctx.shadowColor = '#7c3aed'
+      ctx.shadowBlur = 15
+
+      const gradient = ctx.createLinearGradient(obs.x - obs.radius * 0.5, 0, obs.x + obs.radius * 0.5, 0)
+      gradient.addColorStop(0, '#4c1d95')
+      gradient.addColorStop(0.5, '#6d28d9')
+      gradient.addColorStop(1, '#4c1d95')
+      ctx.fillStyle = gradient
+      ctx.fillRect(obs.x - obs.radius * 0.4, obs.y - obs.radius, obs.radius * 0.8, obs.radius * 2)
+
+      ctx.fillStyle = 'rgba(139,92,246,0.5)'
+      ctx.beginPath()
+      ctx.ellipse(obs.x, obs.y - obs.radius, obs.radius * 0.5, obs.radius * 0.15, 0, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.restore()
+    } else if (obs.type === 'dark_crystal') {
+      ctx.save()
+      ctx.shadowColor = '#a78bfa'
+      ctx.shadowBlur = 15
+
+      ctx.fillStyle = '#4c1d95'
+      ctx.beginPath()
+      ctx.moveTo(obs.x, obs.y - obs.radius * 1.2)
+      ctx.lineTo(obs.x + obs.radius * 0.6, obs.y)
+      ctx.lineTo(obs.x, obs.y + obs.radius * 1.2)
+      ctx.lineTo(obs.x - obs.radius * 0.6, obs.y)
+      ctx.closePath()
+      ctx.fill()
+
+      ctx.fillStyle = 'rgba(167,139,250,0.5)'
+      ctx.beginPath()
+      ctx.moveTo(obs.x, obs.y - obs.radius * 0.8)
+      ctx.lineTo(obs.x + obs.radius * 0.3, obs.y)
+      ctx.lineTo(obs.x, obs.y + obs.radius * 0.4)
+      ctx.lineTo(obs.x - obs.radius * 0.3, obs.y)
+      ctx.closePath()
+      ctx.fill()
+      ctx.restore()
     }
 
     ctx.restore()
@@ -1049,6 +1673,49 @@ function drawChests() {
       ctx.fillRect(chest.x - w / 2, chest.y - h / 4, w, h * 0.75)
     }
 
+    ctx.restore()
+  }
+}
+
+function drawEnvParticles() {
+  const theme = currentTheme.value
+  for (const p of envParticles) {
+    ctx.save()
+    ctx.globalAlpha = p.life * 0.6
+
+    if (theme.particleType === 'firefly') {
+      ctx.shadowColor = p.color
+      ctx.shadowBlur = 10
+    } else if (theme.particleType === 'ember') {
+      ctx.shadowColor = '#f97316'
+      ctx.shadowBlur = 6
+      ctx.globalAlpha = p.life * 0.8
+    } else if (theme.particleType === 'wisp') {
+      ctx.shadowColor = p.color
+      ctx.shadowBlur = 12
+      ctx.globalAlpha = p.life * 0.5
+    } else if (theme.particleType === 'sand') {
+      ctx.globalAlpha = p.life * 0.4
+    } else if (theme.particleType === 'snow') {
+      ctx.globalAlpha = p.life * 0.7
+    }
+
+    ctx.fillStyle = p.color
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+  }
+}
+
+function drawTrailParticles() {
+  for (const p of trailParticles) {
+    ctx.save()
+    ctx.globalAlpha = p.life * 0.5
+    ctx.fillStyle = p.color
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2)
+    ctx.fill()
     ctx.restore()
   }
 }
@@ -1145,6 +1812,14 @@ function drawPlayer() {
   ctx.arc(player.x + 7, player.y - 3, 2.5, 0, Math.PI * 2)
   ctx.fill()
 
+  if (slowTimer > 0) {
+    ctx.strokeStyle = 'rgba(125,211,252,0.5)'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.arc(player.x, player.y, player.radius + 4, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+
   ctx.restore()
 }
 
@@ -1185,13 +1860,60 @@ function drawBlades() {
 function drawEnemies() {
   for (const enemy of enemies) {
     ctx.save()
+
+    if (enemy.type === 'ghost' && enemy.phased) {
+      ctx.globalAlpha = 0.3
+    }
+
     ctx.shadowColor = enemy.color
     ctx.shadowBlur = 8
 
-    ctx.fillStyle = enemy.color
+    if (enemy.type === 'frost') {
+      const gradient = ctx.createRadialGradient(enemy.x, enemy.y, 0, enemy.x, enemy.y, enemy.radius)
+      gradient.addColorStop(0, '#e0f2fe')
+      gradient.addColorStop(1, '#38bdf8')
+      ctx.fillStyle = gradient
+    } else if (enemy.type === 'lava') {
+      const gradient = ctx.createRadialGradient(enemy.x, enemy.y, 0, enemy.x, enemy.y, enemy.radius)
+      gradient.addColorStop(0, '#fdba74')
+      gradient.addColorStop(1, '#ea580c')
+      ctx.fillStyle = gradient
+    } else if (enemy.type === 'ghost') {
+      const gradient = ctx.createRadialGradient(enemy.x, enemy.y, 0, enemy.x, enemy.y, enemy.radius)
+      gradient.addColorStop(0, '#e9d5ff')
+      gradient.addColorStop(1, '#8b5cf6')
+      ctx.fillStyle = gradient
+    } else {
+      ctx.fillStyle = enemy.color
+    }
+
     ctx.beginPath()
     ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2)
     ctx.fill()
+
+    if (enemy.type === 'ghost') {
+      ctx.save()
+      ctx.shadowColor = '#a78bfa'
+      ctx.shadowBlur = 12
+      ctx.strokeStyle = 'rgba(167,139,250,0.5)'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.arc(enemy.x, enemy.y, enemy.radius + 3, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.restore()
+    }
+
+    if (enemy.type === 'frost') {
+      ctx.strokeStyle = 'rgba(186,230,253,0.6)'
+      ctx.lineWidth = 2
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI * 2 / 6) * i
+        ctx.beginPath()
+        ctx.moveTo(enemy.x + Math.cos(a) * enemy.radius * 0.5, enemy.y + Math.sin(a) * enemy.radius * 0.5)
+        ctx.lineTo(enemy.x + Math.cos(a) * enemy.radius, enemy.y + Math.sin(a) * enemy.radius)
+        ctx.stroke()
+      }
+    }
 
     ctx.fillStyle = '#fff'
     const eyeOffset = enemy.radius * 0.3
@@ -1228,7 +1950,8 @@ function drawBoss() {
   if (!boss || !bossAlive) return
 
   ctx.save()
-  ctx.shadowColor = '#dc2626'
+  const theme = currentTheme.value
+  ctx.shadowColor = theme.bossColor
   ctx.shadowBlur = 25
 
   const gradient = ctx.createRadialGradient(
@@ -1236,8 +1959,8 @@ function drawBoss() {
     boss.x, boss.y, boss.radius
   )
   gradient.addColorStop(0, '#fca5a5')
-  gradient.addColorStop(0.5, '#ef4444')
-  gradient.addColorStop(1, '#b91c1c')
+  gradient.addColorStop(0.5, theme.bossColor)
+  gradient.addColorStop(1, '#7f1d1d')
 
   ctx.fillStyle = gradient
   ctx.beginPath()
@@ -1274,6 +1997,21 @@ function drawBoss() {
   ctx.arc(boss.x, boss.y + boss.radius * 0.2, boss.radius * 0.3, 0.2, Math.PI - 0.2)
   ctx.stroke()
 
+  if (boss.phase >= 2) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.arc(boss.x, boss.y, boss.radius + 8, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+  if (boss.phase >= 3) {
+    ctx.strokeStyle = 'rgba(255,100,100,0.3)'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.arc(boss.x, boss.y, boss.radius + 14, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+
   const barW = boss.radius * 2.5
   const barH = 8
   const barX = boss.x - barW / 2
@@ -1284,7 +2022,7 @@ function drawBoss() {
 
   const hpRatio = bossHp / bossMaxHp
   const hpGradient = ctx.createLinearGradient(barX, 0, barX + barW, 0)
-  hpGradient.addColorStop(0, '#ef4444')
+  hpGradient.addColorStop(0, theme.bossColor)
   hpGradient.addColorStop(1, '#f97316')
   ctx.fillStyle = hpGradient
   ctx.fillRect(barX, barY, barW * hpRatio, barH)
@@ -1292,19 +2030,77 @@ function drawBoss() {
   ctx.fillStyle = '#fff'
   ctx.font = 'bold 12px Arial'
   ctx.textAlign = 'center'
-  ctx.fillText('BOSS', boss.x, barY - 5)
+  const phaseText = boss.phase === 3 ? 'BOSS Ⅲ' : boss.phase === 2 ? 'BOSS Ⅱ' : 'BOSS Ⅰ'
+  ctx.fillText(phaseText, boss.x, barY - 5)
 
+  ctx.restore()
+}
+
+function drawBossBullets() {
+  for (const b of bossBullets) {
+    ctx.save()
+    ctx.shadowColor = b.color
+    ctx.shadowBlur = 10
+    ctx.globalAlpha = 0.9
+
+    const gradient = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.radius)
+    gradient.addColorStop(0, '#fff')
+    gradient.addColorStop(0.4, b.color)
+    gradient.addColorStop(1, b.color)
+
+    ctx.fillStyle = gradient
+    ctx.beginPath()
+    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2)
+    ctx.fill()
+
+    ctx.globalAlpha = 0.3
+    ctx.beginPath()
+    ctx.arc(b.x, b.y, b.radius * 2, 0, Math.PI * 2)
+    ctx.fill()
+
+    ctx.restore()
+  }
+}
+
+function drawFog() {
+  const theme = currentTheme.value
+  ctx.save()
+  ctx.fillStyle = theme.fogColor
+  ctx.fillRect(cameraX, cameraY, canvasWidth.value, canvasHeight.value)
+  ctx.restore()
+}
+
+function drawLevelTransition() {
+  if (levelTransitionTimer <= 0) return
+
+  ctx.save()
+  ctx.globalAlpha = levelTransitionAlpha
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'
+  ctx.fillRect(0, 0, canvasWidth.value, canvasHeight.value)
+
+  ctx.globalAlpha = levelTransitionAlpha
+  ctx.fillStyle = '#fbbf24'
+  ctx.font = 'bold 28px Arial'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(levelTransitionText, canvasWidth.value / 2, canvasHeight.value / 2)
   ctx.restore()
 }
 
 function gameLoop() {
   if (!isRunning.value || gameOver.value || showLevelComplete.value) return
 
+  gameTick++
   updateCamera()
   bladeAngle += bladeSpeed.value
   updateBlades()
 
   if (invincibleTimer > 0) invincibleTimer--
+  if (slowTimer > 0) slowTimer--
+
+  if (isDragging && gameTick % 3 === 0) {
+    addTrailParticle()
+  }
 
   enemySpawnTimer++
   if (enemySpawnTimer >= enemySpawnInterval && !bossSpawned) {
@@ -1325,9 +2121,20 @@ function gameLoop() {
   }
 
   updateEnemies()
+  updateBossBullets()
+  updateEnvParticles()
+  updateTrailParticles()
+  updateHazards()
   updateParticles()
   checkCollisions()
   checkWaveComplete()
+
+  if (levelTransitionTimer > 0) {
+    levelTransitionTimer--
+    if (levelTransitionTimer < 30) {
+      levelTransitionAlpha = levelTransitionTimer / 30
+    }
+  }
 
   draw()
 
@@ -1465,8 +2272,11 @@ function movePlayer(pos) {
   const dx = pos.x - dragStartX
   const dy = pos.y - dragStartY
 
-  let newX = playerStartX + dx * playerSpeed.value
-  let newY = playerStartY + dy * playerSpeed.value
+  let speedMult = playerSpeed.value
+  if (slowTimer > 0) speedMult *= 0.5
+
+  let newX = playerStartX + dx * speedMult
+  let newY = playerStartY + dy * speedMult
 
   newX = Math.max(player.radius, Math.min(mapWidth - player.radius, newX))
   newY = Math.max(player.radius, Math.min(mapHeight - player.radius, newY))
@@ -1736,6 +2546,14 @@ onUnmounted(() => {
 
 .overlay-title.gameover {
   color: #ef4444;
+}
+
+.overlay-subtitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #22c55e;
+  margin-bottom: 8px;
+  opacity: 0.9;
 }
 
 .overlay-score {
