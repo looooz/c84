@@ -36,12 +36,24 @@
       ></canvas>
     </div>
 
-    <div class="game-status" v-if="gameOver">
+    <div class="progress-bar-wrap">
+      <div class="progress-label">🎯 成长进度: {{ bigFishEaten }} / {{ VICTORY_BIG_FISH_COUNT }}</div>
+      <div class="progress-bar">
+        <div class="progress-fill" :style="{ width: Math.min(100, bigFishEaten / VICTORY_BIG_FISH_COUNT * 100) + '%' }"></div>
+      </div>
+    </div>
+
+    <div class="game-status win-status" v-if="gameWon">
+      <div class="status-text">🎉 恭喜通关！</div>
+      <div class="status-score">最终得分: {{ score }}</div>
+    </div>
+
+    <div class="game-status" v-if="gameOver && !gameWon">
       <div class="status-text">游戏结束！</div>
       <div class="status-score">最终得分: {{ score }}</div>
     </div>
 
-    <div class="game-status" v-if="!gameOver && !isRunning">
+    <div class="game-status" v-if="!gameOver && !gameWon && !isRunning">
       <div class="status-text" v-if="score === 0">点击开始游戏</div>
       <div class="status-text" v-else>游戏已暂停</div>
     </div>
@@ -81,15 +93,20 @@ const BASE_PLAYER_SIZE = 28
 const MAX_SIZE_LEVEL = 10
 const INITIAL_SPAWN_INTERVAL = 1200
 const MIN_SPAWN_INTERVAL = 400
+const VICTORY_BIG_FISH_COUNT = 10
 
 const canvasSize = ref({ w: 360, h: 500 })
 const score = ref(0)
 const gameOver = ref(false)
+const gameWon = ref(false)
 const isRunning = ref(false)
+const bigFishEaten = ref(0)
 
 const highScore = computed(() => highScores['bigfish'] || 0)
 const fishSizeLevel = computed(() => {
-  return Math.min(MAX_SIZE_LEVEL, Math.floor(player.size / BASE_PLAYER_SIZE) + 1)
+  const maxSize = getMaxPlayerSize()
+  const levelSize = maxSize / MAX_SIZE_LEVEL
+  return Math.min(MAX_SIZE_LEVEL, Math.floor(player.size / levelSize) + 1)
 })
 
 let ctx = null
@@ -134,17 +151,40 @@ function randInt(min, max) {
 
 function createFish() {
   const side = Math.random() < 0.5 ? 'left' : 'right'
-  const minSize = Math.max(12, player.size * 0.3)
-  const maxSize = Math.min(70, player.size * 1.8)
-  const size = randRange(minSize, maxSize)
+  const canvasH = canvasSize.value.h
+  const canvasW = canvasSize.value.w
+
+  const minFishSize = Math.max(10, player.size * 0.25)
+  const maxFishSizeByCanvas = Math.min(canvasH * 0.55, canvasW * 0.35)
+  const maxFishSizeByPlayer = player.size * 2.8
+  const maxFishSize = Math.max(minFishSize * 2, Math.min(maxFishSizeByCanvas, maxFishSizeByPlayer))
+
+  const hasBigFish = Math.random() < 0.35
+  let size
+  if (hasBigFish && player.size < maxFishSize) {
+    size = randRange(Math.max(minFishSize, player.size * 1.1), maxFishSize)
+  } else {
+    size = randRange(minFishSize, Math.min(maxFishSize, player.size * 1.2))
+  }
+
+  const fishHalfH = size * 0.7
+  const minY = fishHalfH + 8
+  const maxY = canvasH - fishHalfH - 8
+  let y
+  if (minY >= maxY) {
+    y = canvasH / 2
+  } else {
+    y = randRange(minY, maxY)
+  }
+
   const colors = FISH_COLORS[randInt(0, FISH_COLORS.length - 1)]
-  const baseSpeed = randRange(1.2, 3.2)
-  const sizeFactor = 1 - (size - minSize) / (maxSize - minSize) * 0.5
-  const speed = baseSpeed * sizeFactor
+  const baseSpeed = randRange(1.0, 3.0)
+  const sizeFactor = 1 - (size - minFishSize) / Math.max(1, maxFishSize - minFishSize) * 0.5
+  const speed = baseSpeed * Math.max(0.6, sizeFactor)
 
   return {
-    x: side === 'left' ? -size * 2 : canvasSize.value.w + size * 2,
-    y: randRange(size * 2, canvasSize.value.h - size * 2),
+    x: side === 'left' ? -size * 2 : canvasW + size * 2,
+    y: y,
     size: size,
     speed: speed * (side === 'left' ? 1 : -1),
     facing: side === 'left' ? 1 : -1,
@@ -299,6 +339,32 @@ function draw() {
   }
 }
 
+function getFishWidth(size) {
+  return size * 2.0
+}
+
+function getFishHeight(size) {
+  return size * 1.3
+}
+
+function getMaxPlayerSize() {
+  const canvasW = canvasSize.value.w
+  const canvasH = canvasSize.value.h
+  const maxSizeByW = canvasW * 0.35
+  const maxSizeByH = canvasH * 0.55
+  const baseMax = Math.min(maxSizeByW, maxSizeByH)
+  return Math.max(BASE_PLAYER_SIZE * 3, baseMax)
+}
+
+function checkVictory() {
+  if (bigFishEaten.value >= VICTORY_BIG_FISH_COUNT && !gameWon.value) {
+    gameWon.value = true
+    isRunning.value = false
+    stopGame()
+    handleGameOver()
+  }
+}
+
 function checkCollision(fish) {
   const dx = player.x - fish.x
   const dy = player.y - fish.y
@@ -308,6 +374,11 @@ function checkCollision(fish) {
 }
 
 function update(deltaTime) {
+  const canvasW = canvasSize.value.w
+  const canvasH = canvasSize.value.h
+  const playerHalfW = getFishWidth(player.size) / 2
+  const playerHalfH = getFishHeight(player.size) / 2
+
   const dx = player.targetX - player.x
   const dy = player.targetY - player.y
   const dist = Math.sqrt(dx * dx + dy * dy)
@@ -321,9 +392,10 @@ function update(deltaTime) {
     }
   }
 
-  player.x = Math.max(player.size, Math.min(canvasSize.value.w - player.size, player.x))
-  player.y = Math.max(player.size, Math.min(canvasSize.value.h - player.size, player.y))
+  player.x = Math.max(playerHalfW, Math.min(canvasW - playerHalfW, player.x))
+  player.y = Math.max(playerHalfH, Math.min(canvasH - playerHalfH, player.y))
 
+  let ateBigFish = false
   fishes.forEach(fish => {
     if (fish.eaten) return
     fish.x += fish.speed
@@ -332,12 +404,18 @@ function update(deltaTime) {
     if (checkCollision(fish)) {
       if (fish.size <= player.size * 0.95) {
         fish.eaten = true
+        const isBigTarget = fish.size > player.size * 0.7
         const sizeGain = fish.size * 0.12
-        player.size = Math.min(BASE_PLAYER_SIZE * MAX_SIZE_LEVEL, player.size + sizeGain)
-        player.speed = Math.max(2.5, 6 - (player.size - BASE_PLAYER_SIZE) * 0.03)
+        player.size = Math.min(getMaxPlayerSize(), player.size + sizeGain)
+        player.speed = Math.max(2, 6 - (player.size - BASE_PLAYER_SIZE) * 0.025)
         score.value += Math.floor(fish.size * 2)
         for (let i = 0; i < 5; i++) {
           bubbles.push(createBubble(fish.x, fish.y))
+        }
+
+        if (isBigTarget) {
+          bigFishEaten.value++
+          ateBigFish = true
         }
 
         spawnInterval = Math.max(MIN_SPAWN_INTERVAL, INITIAL_SPAWN_INTERVAL - score.value * 0.8)
@@ -350,10 +428,14 @@ function update(deltaTime) {
     }
   })
 
+  if (ateBigFish) {
+    checkVictory()
+  }
+
   fishes = fishes.filter(fish => {
     if (fish.eaten) return false
-    if (fish.speed > 0 && fish.x > canvasSize.value.w + fish.size * 3) return false
-    if (fish.speed < 0 && fish.x < -fish.size * 3) return false
+    if (fish.speed > 0 && fish.x > canvasW + getFishWidth(fish.size)) return false
+    if (fish.speed < 0 && fish.x < -getFishWidth(fish.size)) return false
     return true
   })
 
@@ -395,9 +477,11 @@ function initGame() {
   bubbles = []
   score.value = 0
   gameOver.value = false
+  gameWon.value = false
   isRunning.value = false
   scoreSubmitted = false
   spawnInterval = INITIAL_SPAWN_INTERVAL
+  bigFishEaten.value = 0
 
   player.x = canvasSize.value.w / 2
   player.y = canvasSize.value.h / 2
@@ -447,7 +531,7 @@ function stopGame() {
 }
 
 function toggleGame() {
-  if (gameOver.value) {
+  if (gameOver.value || gameWon.value) {
     resetGame()
     return
   }
@@ -688,6 +772,38 @@ onUnmounted(() => {
 
 .bigfish-canvas {
   cursor: none;
+}
+
+.progress-bar-wrap {
+  margin-top: 12px;
+  width: 100%;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+.progress-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 6px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ffd700, #ffaa00);
+  border-radius: 5px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
 }
 
 .game-status {
