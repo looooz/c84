@@ -10,6 +10,22 @@
       </button>
     </div>
 
+    <div class="theme-selector" v-if="!isRunning && !gameOver && !showLevelComplete">
+      <div class="theme-label">选择主题：</div>
+      <div class="theme-options">
+        <button 
+          v-for="theme in patternThemes" 
+          :key="theme.id"
+          class="theme-btn"
+          :class="{ active: currentTheme === theme.id }"
+          @click="currentTheme = theme.id; initBoard()"
+        >
+          <span class="theme-icon">{{ theme.preview }}</span>
+          <span class="theme-name">{{ theme.name }}</span>
+        </button>
+      </div>
+    </div>
+
     <div class="status-bar">
       <div class="status-item">
         <span class="status-label">第</span>
@@ -24,9 +40,19 @@
         <span class="status-label">剩余</span>
         <span class="status-value">{{ remainingPairs }}</span>
       </div>
-      <div class="status-item" v-if="timeLimit > 0">
-        <span class="status-label">时间</span>
-        <span class="status-value" :class="{ danger: timeLeft <= 10 }">{{ timeLeft }}s</span>
+    </div>
+
+    <div class="time-bar-container" v-if="timeLimit > 0">
+      <div class="time-bar-label">
+        <el-icon :size="14"><Timer /></el-icon>
+        <span>{{ timeLeft }}s</span>
+      </div>
+      <div class="time-bar">
+        <div 
+          class="time-bar-fill" 
+          :style="{ width: (timeLeft / timeLimit * 100) + '%' }"
+          :class="{ danger: timeLeft <= 10, warning: timeLeft > 10 && timeLeft <= 30 }"
+        ></div>
       </div>
     </div>
 
@@ -50,6 +76,13 @@
       </div>
     </div>
 
+    <div class="game-overlay" v-if="showNoMoves">
+      <div class="overlay-content">
+        <div class="overlay-title">🔄 自动重排</div>
+        <div class="overlay-desc">当前没有可消除的方块，正在重新排列...</div>
+      </div>
+    </div>
+
     <div class="game-overlay" v-if="gameOver">
       <div class="overlay-content">
         <div class="overlay-title gameover">💀 游戏结束</div>
@@ -59,15 +92,19 @@
       </div>
     </div>
 
-    <div class="game-overlay" v-if="!isRunning && !gameOver && !showLevelComplete && level === 1 && score === 0">
+    <div class="game-overlay" v-if="!isRunning && !gameOver && !showLevelComplete && !showNoMoves && level === 1 && score === 0">
       <div class="overlay-content">
         <div class="overlay-title">🎴 连连看</div>
-        <div class="overlay-desc">点击两个相同图案，若它们之间能用不超过两个拐点的直线连通，即可消除。<br/>消除所有方块进入下一关！</div>
+        <div class="overlay-desc">点击两个相同图案，若它们之间能用不超过两个拐点的直线连通，即可消除。<br/><br/>消除所有方块进入下一关！</div>
         <button class="overlay-btn start" @click="startGame">开始游戏</button>
       </div>
     </div>
 
     <div class="control-panel" v-if="isRunning">
+      <button class="control-btn theme-btn-inline" @click="showThemeSelector = true">
+        <el-icon :size="18"><Picture /></el-icon>
+        <span>主题</span>
+      </button>
       <button class="control-btn shuffle-btn" @click="shuffleBoard">
         <el-icon :size="18"><Refresh /></el-icon>
         <span>重排 ({{ shuffleCount }})</span>
@@ -82,17 +119,39 @@
       </button>
     </div>
 
-    <div class="control-panel" v-if="!isRunning && !gameOver && !showLevelComplete && (level > 1 || score > 0)">
+    <div class="control-panel" v-if="!isRunning && !gameOver && !showLevelComplete && !showNoMoves && (level > 1 || score > 0)">
       <button class="control-btn start-btn" @click="toggleGame">
         <el-icon :size="18"><VideoPlay /></el-icon>
         <span>继续</span>
       </button>
     </div>
+
+    <div class="theme-modal" v-if="showThemeSelector" @click.self="showThemeSelector = false">
+      <div class="theme-modal-content">
+        <div class="theme-modal-title">选择图案主题</div>
+        <div class="theme-modal-grid">
+          <button 
+            v-for="theme in patternThemes" 
+            :key="theme.id"
+            class="theme-modal-btn"
+            :class="{ active: currentTheme === theme.id }"
+            @click="changeTheme(theme.id)"
+          >
+            <div class="theme-modal-preview">{{ theme.preview }}</div>
+            <div class="theme-modal-name">{{ theme.name }}</div>
+            <div class="theme-modal-sample">
+              <span v-for="(icon, i) in theme.icons.slice(0, 4)" :key="i">{{ icon }}</span>
+            </div>
+          </button>
+        </div>
+        <button class="theme-modal-close" @click="showThemeSelector = false">关闭</button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, inject, nextTick } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted, inject, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -103,11 +162,55 @@ const submitScore = inject('submitScore')
 const highScores = inject('highScores')
 const loadHighScores = inject('loadHighScores')
 
-const PATTERN_ICONS = [
-  '🍎', '🍊', '🍋', '🍇', '🍉', '🍓', '🍑', '🍒',
-  '🥝', '🍍', '🥭', '🍐', '🥥', '🍌', '🫐', '🍈',
-  '⭐', '🌙', '☀️', '⚡', '🔥', '💧', '❄️', '🌈',
-  '❤️', '💜', '💙', '💚', '💛', '🧡', '🖤', '🤍'
+const patternThemes = [
+  {
+    id: 'fruits',
+    name: '水果',
+    preview: '🍎',
+    icons: ['🍎', '🍊', '🍋', '🍇', '🍉', '🍓', '🍑', '🍒', '🥝', '🍍', '🥭', '🍐', '🥥', '🍌', '🫐', '🍈', '🍏', '🍊', '🥑', '🍆', '🌽', '🥕', '🥒', '🥬', '🥦', '🧄', '🧅', '🥔', '🍠', '🥯', '🥨', '🧀']
+  },
+  {
+    id: 'animals',
+    name: '动物',
+    preview: '🐶',
+    icons: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🦋', '🐌', '🐞', '🦗']
+  },
+  {
+    id: 'food',
+    name: '食物',
+    preview: '🍔',
+    icons: ['🍔', '🍟', '🍕', '🌭', '🥪', '🌮', '🌯', '🍗', '🍖', '🥩', '🍤', '🍣', '🍱', '🥟', '🍜', '🍝', '🍛', '🍚', '🍙', '🍘', '🥮', '🍡', '🍧', '🍨', '🍦', '🥧', '🍰', '🎂', '🍮', '🍯', '🍩', '🍪']
+  },
+  {
+    id: 'mahjong',
+    name: '麻将',
+    preview: '🀇',
+    icons: ['🀇', '🀈', '🀉', '🀊', '🀋', '🀌', '🀍', '🀎', '🀏', '🀐', '🀑', '🀒', '🀓', '🀔', '🀕', '🀖', '🀗', '🀘', '🀙', '🀚', '🀛', '🀜', '🀝', '🀞', '🀟', '🀠', '🀡', '🀀', '🀁', '🀂', '🀃', '🀄']
+  },
+  {
+    id: 'emoji',
+    name: '表情',
+    preview: '😀',
+    icons: ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😋', '🤪', '😜', '😝', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶']
+  },
+  {
+    id: 'shapes',
+    name: '形状',
+    preview: '⭐',
+    icons: ['⭐', '🌙', '☀️', '⚡', '🔥', '💧', '❄️', '🌈', '❤️', '💜', '💙', '💚', '💛', '🧡', '🖤', '🤍', '💯', '✅', '❌', '⭕', '🔺', '🔻', '🔷', '🔶', '🔹', '🔸', '▪️', '▫️', '🔳', '🔲', '🔵', '🟢']
+  },
+  {
+    id: 'sports',
+    name: '运动',
+    preview: '⚽',
+    icons: ['⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏉', '🎱', '🏓', '🏸', '🏒', '🏑', '🥅', '🏏', '🥍', '🏀', '⛳', '🎣', '🤿', '🥊', '🥋', '🎽', '🎿', '🛷', '🥌', '🎯', '🪀', '🪁', '🏹', '🎱', '🎮', '🕹️']
+  },
+  {
+    id: 'nature',
+    name: '自然',
+    preview: '🌸',
+    icons: ['🌸', '🌺', '🌻', '🌹', '🌷', '💐', '🌵', '🎄', '🌲', '🌳', '🌴', '🌵', '🌾', '🌿', '☘️', '🍀', '🍁', '🍂', '🍃', '🌍', '🌎', '🌏', '🌙', '☀️', '⭐', '⛅', '🌈', '❄️', '💨', '🌊', '💧', '🔥']
+  }
 ]
 
 const PATTERN_COLORS = [
@@ -122,14 +225,18 @@ const score = ref(0)
 const gameOver = ref(false)
 const isRunning = ref(false)
 const showLevelComplete = ref(false)
+const showNoMoves = ref(false)
 const levelBonus = ref(0)
 const shuffleCount = ref(3)
 const hintCount = ref(3)
 const timeLeft = ref(0)
 const timeLimit = ref(0)
+const currentTheme = ref('fruits')
+const showThemeSelector = ref(false)
 
 const canvasWidth = ref(360)
 const canvasHeight = ref(480)
+const remainingCount = ref(0)
 
 let ctx = null
 let animationId = null
@@ -145,19 +252,15 @@ let hintPair = null
 let hintTimer = 0
 let matchedPath = null
 let matchedPathTimer = 0
-let removeAnimations = []
 let timerInterval = null
 
+const currentPatternIcons = computed(() => {
+  const theme = patternThemes.find(t => t.id === currentTheme.value)
+  return theme ? theme.icons : patternThemes[0].icons
+})
+
 const remainingPairs = computed(() => {
-  let count = 0
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      if (board[r] && board[r][c] && board[r][c].patternId !== 0) {
-        count++
-      }
-    }
-  }
-  return Math.floor(count / 2)
+  return Math.floor(remainingCount.value / 2)
 })
 
 function getLevelConfig(lvl) {
@@ -169,7 +272,7 @@ function getLevelConfig(lvl) {
   const newRows = Math.min(baseRows + rowIncrement, 12)
   
   const patternTypes = Math.min(6 + lvl, 32)
-  const time = lvl >= 3 ? Math.max(60, 180 - (lvl - 3) * 10) : 0
+  const time = lvl >= 1 ? Math.max(40, 120 - (lvl - 1) * 8) : 0
   
   return { cols: newCols, rows: newRows, patternTypes, time }
 }
@@ -182,8 +285,8 @@ function resizeCanvas() {
   let w = screenWidth
   let h = screenWidth * aspectRatio
   
-  if (h > 520) {
-    h = 520
+  if (h > 480) {
+    h = 480
     w = h / aspectRatio
   }
   
@@ -223,26 +326,42 @@ function initBoard() {
   }
   
   board = []
+  let count = 0
   for (let r = 0; r < config.rows; r++) {
-    board[r] = []
+    board[r] = reactive([])
     for (let c = 0; c < config.cols; c++) {
       const idx = r * config.cols + c
-      board[r][c] = {
-        patternId: patterns[idx] || 0,
+      const patternId = patterns[idx] || 0
+      if (patternId !== 0) count++
+      board[r][c] = reactive({
+        patternId: patternId,
         x: c,
         y: r,
         removing: false,
         removeProgress: 0
-      }
+      })
     }
   }
   
   cols = config.cols
   rows = config.rows
+  remainingCount.value = count
   
   if (!hasValidMoves()) {
     shuffleBoardInternal()
   }
+}
+
+function updateRemainingCount() {
+  let count = 0
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (board[r] && board[r][c] && board[r][c].patternId !== 0) {
+        count++
+      }
+    }
+  }
+  remainingCount.value = count
 }
 
 function isBlocked(r, c) {
@@ -442,6 +561,8 @@ function shuffleBoardInternal() {
     }
     attempts++
   } while (!hasValidMoves() && attempts < 50)
+  
+  updateRemainingCount()
 }
 
 function shuffleBoard() {
@@ -453,13 +574,32 @@ function shuffleBoard() {
   draw()
 }
 
+function checkAndAutoShuffle() {
+  if (!hasValidMoves() && remainingCount.value > 0) {
+    showNoMoves.value = true
+    isRunning.value = false
+    stopTimer()
+    
+    setTimeout(() => {
+      shuffleBoardInternal()
+      showNoMoves.value = false
+      isRunning.value = true
+      startTimer()
+      gameLoop()
+      draw()
+    }, 1500)
+    return true
+  }
+  return false
+}
+
 function showHint() {
   if (hintCount.value <= 0 || !isRunning.value) return
   const pair = findHintPair()
   if (pair) {
     hintCount.value--
     hintPair = pair
-    hintTimer = 120
+    hintTimer = 180
     draw()
   }
 }
@@ -521,24 +661,23 @@ function handleSelect(r, c) {
     draw()
     
     setTimeout(() => {
-      const removedCells = []
       for (let rr = 0; rr < rows; rr++) {
         for (let cc = 0; cc < cols; cc++) {
           if (board[rr][cc].removing) {
-            removedCells.push({ r: rr, c: cc })
             board[rr][cc].patternId = 0
             board[rr][cc].removing = false
           }
         }
       }
       matchedPath = null
-      
-      if (remainingPairs.value === 0) {
-        completeLevel()
-      } else if (!hasValidMoves()) {
-        shuffleBoardInternal()
-      }
+      updateRemainingCount()
       draw()
+      
+      if (remainingCount.value === 0) {
+        completeLevel()
+      } else {
+        checkAndAutoShuffle()
+      }
     }, 400)
   } else {
     selectedCell = { r, c }
@@ -586,7 +725,8 @@ function drawCell(r, c, isSelected = false, isHint = false) {
   
   const patternId = cell.patternId
   const color = PATTERN_COLORS[(patternId - 1) % PATTERN_COLORS.length]
-  const icon = PATTERN_ICONS[(patternId - 1) % PATTERN_ICONS.length]
+  const icons = currentPatternIcons.value
+  const icon = icons[(patternId - 1) % icons.length]
   
   ctx.shadowColor = color
   ctx.shadowBlur = isSelected || isHint ? 15 : 6
@@ -621,9 +761,10 @@ function drawCell(r, c, isSelected = false, isHint = false) {
   }
   
   ctx.shadowBlur = 0
-  ctx.font = `bold ${drawSize * 0.55}px Arial, sans-serif`
+  ctx.font = `${drawSize * 0.58}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", Arial, sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#000'
   ctx.fillText(icon, 0, 2)
   
   ctx.restore()
@@ -731,6 +872,7 @@ function initGame() {
   score.value = 0
   gameOver.value = false
   showLevelComplete.value = false
+  showNoMoves.value = false
   isRunning.value = false
   scoreSubmitted = false
   shuffleCount.value = 3
@@ -779,7 +921,10 @@ function stopTimer() {
 function toggleGame() {
   isRunning.value = !isRunning.value
   if (isRunning.value) {
+    startTimer()
     gameLoop()
+  } else {
+    stopTimer()
   }
 }
 
@@ -829,6 +974,14 @@ async function handleGameOver() {
 function resetGame() {
   stopTimer()
   initGame()
+}
+
+function changeTheme(themeId) {
+  currentTheme.value = themeId
+  showThemeSelector.value = false
+  if (board && board.length > 0) {
+    draw()
+  }
 }
 
 async function goBack() {
@@ -923,11 +1076,58 @@ onUnmounted(() => {
   letter-spacing: 2px;
 }
 
+.theme-selector {
+  width: 100%;
+  padding: 0 20px 8px;
+}
+
+.theme-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 8px;
+}
+
+.theme-options {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.theme-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-btn.active {
+  background: rgba(139, 92, 246, 0.4);
+  border-color: rgba(139, 92, 246, 0.6);
+  color: white;
+}
+
+.theme-btn:active {
+  transform: scale(0.95);
+}
+
+.theme-icon {
+  font-size: 16px;
+}
+
 .status-bar {
   display: flex;
   gap: 12px;
   padding: 0 20px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   flex-wrap: wrap;
   justify-content: center;
 }
@@ -957,14 +1157,49 @@ onUnmounted(() => {
   color: #fbbf24;
 }
 
-.status-value.danger {
-  color: #ef4444;
-  animation: pulse 0.5s infinite;
+.time-bar-container {
+  width: 90%;
+  max-width: 400px;
+  margin-bottom: 10px;
 }
 
-@keyframes pulse {
+.time-bar-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 4px;
+}
+
+.time-bar {
+  width: 100%;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+}
+
+.time-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+  border-radius: 5px;
+  transition: width 1s linear, background-color 0.3s ease;
+}
+
+.time-bar-fill.warning {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.time-bar-fill.danger {
+  background: linear-gradient(90deg, #dc2626, #ef4444);
+  animation: timePulse 0.5s infinite;
+}
+
+@keyframes timePulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  50% { opacity: 0.7; }
 }
 
 .game-canvas-wrapper {
@@ -1013,12 +1248,6 @@ onUnmounted(() => {
 
 .overlay-title.gameover {
   color: #fca5a5;
-}
-
-.overlay-subtitle {
-  font-size: 16px;
-  opacity: 0.9;
-  margin-bottom: 12px;
 }
 
 .overlay-desc {
@@ -1071,9 +1300,9 @@ onUnmounted(() => {
 
 .control-panel {
   display: flex;
-  gap: 12px;
-  padding: 16px 20px;
-  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  gap: 10px;
+  padding: 12px 20px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
   flex-wrap: wrap;
   justify-content: center;
 }
@@ -1082,15 +1311,21 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 18px;
+  padding: 10px 16px;
   border-radius: 22px;
   border: none;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   backdrop-filter: blur(10px);
   transition: all 0.2s ease;
   -webkit-tap-highlight-color: transparent;
+}
+
+.theme-btn-inline {
+  background: rgba(139, 92, 246, 0.3);
+  color: #c4b5fd;
+  border: 1px solid rgba(139, 92, 246, 0.4);
 }
 
 .shuffle-btn {
@@ -1114,5 +1349,98 @@ onUnmounted(() => {
 
 .control-btn:active {
   transform: scale(0.95);
+}
+
+.theme-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 200;
+  backdrop-filter: blur(10px);
+}
+
+.theme-modal-content {
+  background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 100%);
+  border-radius: 24px;
+  padding: 24px 20px;
+  width: 90%;
+  max-width: 360px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.theme-modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.theme-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.theme-modal-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 14px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.theme-modal-btn.active {
+  background: rgba(139, 92, 246, 0.4);
+  border-color: #a78bfa;
+  transform: scale(1.02);
+}
+
+.theme-modal-preview {
+  font-size: 36px;
+  margin-bottom: 4px;
+}
+
+.theme-modal-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 6px;
+}
+
+.theme-modal-sample {
+  font-size: 16px;
+  opacity: 0.9;
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.theme-modal-close {
+  width: 100%;
+  padding: 12px;
+  border-radius: 20px;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-modal-close:active {
+  transform: scale(0.98);
+  background: rgba(255, 255, 255, 0.3);
 }
 </style>
