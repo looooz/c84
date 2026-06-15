@@ -263,6 +263,7 @@ let bossBullets = []
 let bossChargeTimer = 0
 let bossCharging = false
 let bossChargeTarget = { x: 0, y: 0 }
+let bossDamageCooldown = 0
 let bulletRainAngle = 0
 
 let obstacles = []
@@ -597,7 +598,7 @@ function getEnemyTypesForLevel() {
 
 function createEnemy(x, y, type) {
   const levelMult = 1 + (level.value - 1) * 0.15
-  let enemy = { x, y, type }
+  let enemy = { x, y, type, damageCooldown: 0 }
 
   switch (type) {
     case 'normal':
@@ -898,9 +899,10 @@ function checkCollisions() {
     const dist = Math.sqrt(dx * dx + dy * dy)
 
     if (dist < player.radius + enemy.radius) {
-      if (invincibleTimer <= 0) {
+      if (invincibleTimer <= 0 && enemy.damageCooldown <= 0) {
         playerHp.value--
         invincibleTimer = 90
+        enemy.damageCooldown = 120
         screenShake = 10
         addParticles(player.x, player.y, '#ef4444', 15)
 
@@ -978,9 +980,10 @@ function checkCollisions() {
     const dist = Math.sqrt(dx * dx + dy * dy)
 
     if (dist < player.radius + boss.radius) {
-      if (invincibleTimer <= 0) {
+      if (invincibleTimer <= 0 && bossDamageCooldown <= 0) {
         playerHp.value -= 2
         invincibleTimer = 120
+        bossDamageCooldown = 150
         screenShake = 15
         addParticles(player.x, player.y, '#ef4444', 20)
 
@@ -1086,6 +1089,8 @@ function pointToLineDistance(px, py, x1, y1, x2, y2) {
 
 function updateEnemies() {
   for (const enemy of enemies) {
+    if (enemy.damageCooldown > 0) enemy.damageCooldown--
+    
     if (enemy.type === 'ghost') {
       enemy.phaseTimer++
       if (enemy.phaseTimer >= enemy.phaseInterval) {
@@ -1128,6 +1133,7 @@ function updateEnemies() {
   }
 
   if (boss && bossAlive) {
+    if (bossDamageCooldown > 0) bossDamageCooldown--
     updateBossPhase()
 
     if (bossCharging) {
@@ -1353,24 +1359,26 @@ function drawBackground() {
   const theme = currentTheme.value
   const sx = Math.floor(cameraX / TILE_SIZE) * TILE_SIZE
   const sy = Math.floor(cameraY / TILE_SIZE) * TILE_SIZE
-  const gradient = ctx.createLinearGradient(sx, sy, sx, sy + canvasHeight.value)
+  const extraPadding = TILE_SIZE * 2
+  const gradient = ctx.createLinearGradient(sx, sy, sx, sy + canvasHeight.value + extraPadding)
   gradient.addColorStop(0, theme.bgTop)
   gradient.addColorStop(1, theme.bgBottom)
   ctx.fillStyle = gradient
-  ctx.fillRect(sx, sy, canvasWidth.value, canvasHeight.value)
+  ctx.fillRect(sx - extraPadding, sy - extraPadding, 
+    canvasWidth.value + extraPadding * 2, canvasHeight.value + extraPadding * 2)
 
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)'
   ctx.lineWidth = 1
-  for (let x = sx; x < sx + canvasWidth.value + TILE_SIZE; x += TILE_SIZE) {
+  for (let x = sx; x < sx + canvasWidth.value + TILE_SIZE + extraPadding; x += TILE_SIZE) {
     ctx.beginPath()
-    ctx.moveTo(x, sy)
-    ctx.lineTo(x, sy + canvasHeight.value)
+    ctx.moveTo(x, sy - extraPadding)
+    ctx.lineTo(x, sy + canvasHeight.value + extraPadding)
     ctx.stroke()
   }
-  for (let y = sy; y < sy + canvasHeight.value + TILE_SIZE; y += TILE_SIZE) {
+  for (let y = sy; y < sy + canvasHeight.value + TILE_SIZE + extraPadding; y += TILE_SIZE) {
     ctx.beginPath()
-    ctx.moveTo(sx, y)
-    ctx.lineTo(sx + canvasWidth.value, y)
+    ctx.moveTo(sx - extraPadding, y)
+    ctx.lineTo(sx + canvasWidth.value + extraPadding, y)
     ctx.stroke()
   }
 }
@@ -2528,11 +2536,14 @@ onUnmounted(() => {
 .game-canvas-wrapper {
   padding: 0;
   position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  background: #0f172a;
 }
 
 .game-canvas {
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  display: block;
   touch-action: none;
   user-select: none;
 }

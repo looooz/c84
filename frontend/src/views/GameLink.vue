@@ -808,11 +808,55 @@ function drawPath() {
   ctx.shadowColor = '#22c55e'
   ctx.shadowBlur = 10
   
+  const padding = 4
+  const halfCell = cellSize / 2 - padding
+  
+  function getEdgePoint(fromR, fromC, toR, toC) {
+    const fromX = fromC * cellSize + cellSize / 2
+    const fromY = fromR * cellSize + cellSize / 2
+    const toX = toC * cellSize + cellSize / 2
+    const toY = toR * cellSize + cellSize / 2
+    
+    const dx = toX - fromX
+    const dy = toY - fromY
+    
+    if (Math.abs(dx) > Math.abs(dy)) {
+      const t = halfCell / Math.abs(dx)
+      return { x: fromX + dx * t, y: fromY + dy * t }
+    } else {
+      const t = halfCell / Math.abs(dy || 1)
+      return { x: fromX + dx * t, y: fromY + dy * t }
+    }
+  }
+  
   ctx.beginPath()
   for (let i = 0; i < matchedPath.length; i++) {
     const p = matchedPath[i]
-    const x = Math.max(0, Math.min(cols - 1, p.c)) * cellSize + cellSize / 2
-    const y = Math.max(0, Math.min(rows - 1, p.r)) * cellSize + cellSize / 2
+    const clampedR = Math.max(0, Math.min(rows - 1, p.r))
+    const clampedC = Math.max(0, Math.min(cols - 1, p.c))
+    const centerX = clampedC * cellSize + cellSize / 2
+    const centerY = clampedR * cellSize + cellSize / 2
+    
+    let x, y
+    
+    if (i === 0 && matchedPath.length > 1) {
+      const nextP = matchedPath[1]
+      const ep = getEdgePoint(clampedR, clampedC, 
+        Math.max(0, Math.min(rows - 1, nextP.r)), 
+        Math.max(0, Math.min(cols - 1, nextP.c)))
+      x = ep.x
+      y = ep.y
+    } else if (i === matchedPath.length - 1 && matchedPath.length > 1) {
+      const prevP = matchedPath[i - 1]
+      const ep = getEdgePoint(clampedR, clampedC,
+        Math.max(0, Math.min(rows - 1, prevP.r)),
+        Math.max(0, Math.min(cols - 1, prevP.c)))
+      x = ep.x
+      y = ep.y
+    } else {
+      x = centerX
+      y = centerY
+    }
     
     if (i === 0) ctx.moveTo(x, y)
     else ctx.lineTo(x, y)
