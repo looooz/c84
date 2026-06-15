@@ -598,7 +598,7 @@ function getEnemyTypesForLevel() {
 
 function createEnemy(x, y, type) {
   const levelMult = 1 + (level.value - 1) * 0.15
-  let enemy = { x, y, type, damageCooldown: 0 }
+  let enemy = { x, y, type }
 
   switch (type) {
     case 'normal':
@@ -899,12 +899,12 @@ function checkCollisions() {
     const dist = Math.sqrt(dx * dx + dy * dy)
 
     if (dist < player.radius + enemy.radius) {
-      if (invincibleTimer <= 0 && enemy.damageCooldown <= 0) {
+      if (invincibleTimer <= 0) {
         playerHp.value--
         invincibleTimer = 90
-        enemy.damageCooldown = 120
         screenShake = 10
         addParticles(player.x, player.y, '#ef4444', 15)
+        addParticles(enemy.x, enemy.y, enemy.color, 12)
 
         if (enemy.type === 'frost') {
           slowTimer = 120
@@ -914,6 +914,9 @@ function checkCollisions() {
           endGame()
           return
         }
+
+        enemies.splice(i, 1)
+        continue
       }
     }
 
@@ -1089,8 +1092,6 @@ function pointToLineDistance(px, py, x1, y1, x2, y2) {
 
 function updateEnemies() {
   for (const enemy of enemies) {
-    if (enemy.damageCooldown > 0) enemy.damageCooldown--
-    
     if (enemy.type === 'ghost') {
       enemy.phaseTimer++
       if (enemy.phaseTimer >= enemy.phaseInterval) {

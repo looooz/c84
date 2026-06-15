@@ -801,65 +801,88 @@ function drawPath() {
   if (!matchedPath || matchedPath.length < 2) return
   
   ctx.save()
-  ctx.strokeStyle = 'rgba(34, 197, 94, 0.85)'
+  ctx.strokeStyle = 'rgba(34, 197, 94, 0.9)'
   ctx.lineWidth = 4
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
   ctx.shadowColor = '#22c55e'
   ctx.shadowBlur = 10
   
-  const padding = 4
-  const halfCell = cellSize / 2 - padding
-  
-  function getEdgePoint(fromR, fromC, toR, toC) {
-    const fromX = fromC * cellSize + cellSize / 2
-    const fromY = fromR * cellSize + cellSize / 2
-    const toX = toC * cellSize + cellSize / 2
-    const toY = toR * cellSize + cellSize / 2
+  function getPoint(i) {
+    const p = matchedPath[i]
+    const prevP = i > 0 ? matchedPath[i - 1] : null
+    const nextP = i < matchedPath.length - 1 ? matchedPath[i + 1] : null
     
-    const dx = toX - fromX
-    const dy = toY - fromY
+    const r = Math.max(-1, Math.min(rows, p.r))
+    const c = Math.max(-1, Math.min(cols, p.c))
     
-    if (Math.abs(dx) > Math.abs(dy)) {
-      const t = halfCell / Math.abs(dx)
-      return { x: fromX + dx * t, y: fromY + dy * t }
-    } else {
-      const t = halfCell / Math.abs(dy || 1)
-      return { x: fromX + dx * t, y: fromY + dy * t }
+    const cellLeft = c * cellSize
+    const cellRight = (c + 1) * cellSize
+    const cellTop = r * cellSize
+    const cellBottom = (r + 1) * cellSize
+    const cellCenterX = c * cellSize + cellSize / 2
+    const cellCenterY = r * cellSize + cellSize / 2
+    
+    let fromDir = null
+    let toDir = null
+    
+    if (prevP) {
+      if (prevP.c < p.c) fromDir = 'left'
+      else if (prevP.c > p.c) fromDir = 'right'
+      else if (prevP.r < p.r) fromDir = 'top'
+      else if (prevP.r > p.r) fromDir = 'bottom'
     }
+    
+    if (nextP) {
+      if (nextP.c > p.c) toDir = 'right'
+      else if (nextP.c < p.c) toDir = 'left'
+      else if (nextP.r > p.r) toDir = 'bottom'
+      else if (nextP.r < p.r) toDir = 'top'
+    }
+    
+    if (i === 0) {
+      if (toDir === 'right') return { x: cellRight, y: cellCenterY }
+      if (toDir === 'left') return { x: cellLeft, y: cellCenterY }
+      if (toDir === 'bottom') return { x: cellCenterX, y: cellBottom }
+      if (toDir === 'top') return { x: cellCenterX, y: cellTop }
+      return { x: cellCenterX, y: cellCenterY }
+    }
+    
+    if (i === matchedPath.length - 1) {
+      if (fromDir === 'right') return { x: cellRight, y: cellCenterY }
+      if (fromDir === 'left') return { x: cellLeft, y: cellCenterY }
+      if (fromDir === 'bottom') return { x: cellCenterX, y: cellBottom }
+      if (fromDir === 'top') return { x: cellCenterX, y: cellTop }
+      return { x: cellCenterX, y: cellCenterY }
+    }
+    
+    if (fromDir && toDir) {
+      if ((fromDir === 'left' && toDir === 'top') || (fromDir === 'top' && toDir === 'left'))
+        return { x: cellLeft, y: cellTop }
+      if ((fromDir === 'left' && toDir === 'bottom') || (fromDir === 'bottom' && toDir === 'left'))
+        return { x: cellLeft, y: cellBottom }
+      if ((fromDir === 'right' && toDir === 'top') || (fromDir === 'top' && toDir === 'right'))
+        return { x: cellRight, y: cellTop }
+      if ((fromDir === 'right' && toDir === 'bottom') || (fromDir === 'bottom' && toDir === 'right'))
+        return { x: cellRight, y: cellBottom }
+      if (fromDir === 'left' && toDir === 'right')
+        return { x: cellLeft, y: cellCenterY }
+      if (fromDir === 'right' && toDir === 'left')
+        return { x: cellRight, y: cellCenterY }
+      if (fromDir === 'top' && toDir === 'bottom')
+        return { x: cellCenterX, y: cellTop }
+      if (fromDir === 'bottom' && toDir === 'top')
+        return { x: cellCenterX, y: cellBottom }
+    }
+    
+    return { x: cellCenterX, y: cellCenterY }
   }
   
   ctx.beginPath()
   for (let i = 0; i < matchedPath.length; i++) {
-    const p = matchedPath[i]
-    const clampedR = Math.max(0, Math.min(rows - 1, p.r))
-    const clampedC = Math.max(0, Math.min(cols - 1, p.c))
-    const centerX = clampedC * cellSize + cellSize / 2
-    const centerY = clampedR * cellSize + cellSize / 2
-    
-    let x, y
-    
-    if (i === 0 && matchedPath.length > 1) {
-      const nextP = matchedPath[1]
-      const ep = getEdgePoint(clampedR, clampedC, 
-        Math.max(0, Math.min(rows - 1, nextP.r)), 
-        Math.max(0, Math.min(cols - 1, nextP.c)))
-      x = ep.x
-      y = ep.y
-    } else if (i === matchedPath.length - 1 && matchedPath.length > 1) {
-      const prevP = matchedPath[i - 1]
-      const ep = getEdgePoint(clampedR, clampedC,
-        Math.max(0, Math.min(rows - 1, prevP.r)),
-        Math.max(0, Math.min(cols - 1, prevP.c)))
-      x = ep.x
-      y = ep.y
-    } else {
-      x = centerX
-      y = centerY
-    }
-    
-    if (i === 0) ctx.moveTo(x, y)
-    else ctx.lineTo(x, y)
+    const pt = getPoint(i)
+    if (i === 0) ctx.moveTo(pt.x, pt.y)
+    else ctx.lineTo(pt.x, pt.y)
   }
   ctx.stroke()
   ctx.restore()
