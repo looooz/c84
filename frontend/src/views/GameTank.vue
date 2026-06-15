@@ -46,6 +46,7 @@
           消灭所有敌人，保护基地！
         </div>
         <button class="overlay-btn start" @click="startGame">开始游戏</button>
+        <button class="overlay-btn secondary" @click="goBack">返回首页</button>
       </div>
     </div>
 
@@ -55,6 +56,7 @@
         <div class="overlay-score">当前得分：{{ score }}</div>
         <div class="overlay-bonus">关卡奖励：+{{ levelBonus }}分</div>
         <button class="overlay-btn" @click="nextLevel">下一关</button>
+        <button class="overlay-btn secondary" @click="goBack">返回首页</button>
       </div>
     </div>
 
@@ -64,6 +66,7 @@
         <div class="overlay-score">最终得分：{{ score }}</div>
         <div class="overlay-level">到达关卡：第 {{ level }} 关</div>
         <button class="overlay-btn" @click="resetGame">重新开始</button>
+        <button class="overlay-btn secondary" @click="goBack">返回首页</button>
       </div>
     </div>
 
@@ -582,6 +585,14 @@ onUnmounted(() => {
 .overlay-btn.start {
   background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
   box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+}
+
+.overlay-btn.secondary {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  box-shadow: none;
+  margin-top: 10px;
 }
 
 .overlay-btn:active {

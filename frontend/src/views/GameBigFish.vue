@@ -29,15 +29,33 @@
       <div class="progress-label">{{ progressLabel }}</div>
       <div class="progress-bar"><div class="progress-fill" :style="{width: progressPct+'%'}"></div></div>
     </div>
-    <div class="game-status win-status" v-if="gameWon">
-      <div class="status-text">🎉 通关！深海之王！</div><div class="status-score">最终得分: {{ score }}</div>
+    <div class="game-overlay" v-if="showStartScreen">
+      <div class="overlay-content">
+        <div class="overlay-title">🐟 大鱼吃小鱼</div>
+        <div class="overlay-desc">移动鼠标或触摸屏幕控制小鱼<br/>吃比你小的鱼成长，避开大鱼<br/>收集道具获得能力，击败Boss深入海底！</div>
+        <button class="overlay-btn start" @click="startGame">开始游戏</button>
+        <button class="overlay-btn secondary" @click="goBack">返回首页</button>
+      </div>
     </div>
-    <div class="game-status" v-if="gameOver && !gameWon">
-      <div class="status-text">游戏结束！</div><div class="status-score">最终得分: {{ score }}</div>
+
+    <div class="game-overlay" v-if="gameWon">
+      <div class="overlay-content">
+        <div class="overlay-title">🏆 通关！深海之王！</div>
+        <div class="overlay-score">最终得分：{{ score }}</div>
+        <div class="overlay-level">恭喜你征服了所有5个海域！</div>
+        <button class="overlay-btn" @click="resetAndStart">再玩一次</button>
+        <button class="overlay-btn secondary" @click="goBack">返回首页</button>
+      </div>
     </div>
-    <div class="game-status" v-if="!gameOver && !gameWon && !isRunning">
-      <div class="status-text" v-if="score===0">点击开始游戏</div>
-      <div class="status-text" v-else>游戏已暂停</div>
+
+    <div class="game-overlay" v-if="gameOver && !gameWon">
+      <div class="overlay-content">
+        <div class="overlay-title gameover">💀 游戏结束</div>
+        <div class="overlay-score">最终得分：{{ score }}</div>
+        <div class="overlay-level">到达海域：{{ currentLevel.name }} (深度 {{ currentLevel.depth }}m)</div>
+        <button class="overlay-btn" @click="resetAndStart">重新开始</button>
+        <button class="overlay-btn secondary" @click="goBack">返回首页</button>
+      </div>
     </div>
     <div class="level-transition" v-if="showTransition">{{ transitionText }}</div>
     <div class="control-panel">
@@ -60,6 +78,7 @@ const submitScore = inject('submitScore'), highScores = inject('highScores'), lo
 const BASE_PLAYER_SIZE = 28
 const canvasSize = ref({ w: 360, h: 500 })
 const score = ref(0), gameOver = ref(false), gameWon = ref(false), isRunning = ref(false)
+const showStartScreen = ref(true)
 const showTransition = ref(false), transitionText = ref('')
 const currentLevelIdx = ref(0)
 const activePowerUps = ref([])
@@ -532,9 +551,14 @@ function initGame(){
 }
 
 function startGame(){
+  showStartScreen.value=false
   if(gameOver.value||gameWon.value)initGame()
   isRunning.value=true;lastTime=performance.now()
   animationFrame=requestAnimationFrame(loop);spawnTimer=setTimeout(spawnFish,500)
+}
+function resetAndStart(){
+  resetGame()
+  startGame()
 }
 function pauseGame(){isRunning.value=false;if(animationFrame){cancelAnimationFrame(animationFrame);animationFrame=null}
   if(spawnTimer){clearTimeout(spawnTimer);spawnTimer=null}}
@@ -633,4 +657,16 @@ onUnmounted(()=>{stopGame();window.removeEventListener('keydown',handleKeydown);
 .start-btn:active{transform:scale(.95)}
 .tips{margin-top:10px;padding-left:20px;padding-right:20px;padding-bottom:calc(36px + env(safe-area-inset-bottom))}
 .tip-text{font-size:13px;color:rgba(255,255,255,.85);text-align:center;padding:8px 16px;background:rgba(255,255,255,.1);border-radius:20px;backdrop-filter:blur(10px)}
+
+.game-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(5px)}
+.overlay-content{background:linear-gradient(135deg,rgba(255,255,255,.15) 0%,rgba(255,255,255,.05) 100%);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:32px 28px;text-align:center;color:white;max-width:320px;width:85%;backdrop-filter:blur(10px);box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.overlay-title{font-size:28px;font-weight:800;margin-bottom:12px;letter-spacing:1px}
+.overlay-title.gameover{color:#ff6b6b}
+.overlay-desc{font-size:14px;opacity:.9;margin-bottom:20px;line-height:1.8}
+.overlay-score{font-size:20px;font-weight:700;margin-bottom:8px}
+.overlay-level{font-size:14px;opacity:.85;margin-bottom:20px;line-height:1.6}
+.overlay-btn{width:100%;padding:14px 24px;border-radius:14px;border:none;font-size:16px;font-weight:700;cursor:pointer;transition:all .2s ease;background:linear-gradient(135deg,#fbbf24 0%,#f59e0b 100%);color:white;box-shadow:0 4px 15px rgba(251,191,36,.4)}
+.overlay-btn.start{background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%);box-shadow:0 4px 15px rgba(34,197,94,.4)}
+.overlay-btn.secondary{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:white;box-shadow:none;margin-top:10px}
+.overlay-btn:active{transform:scale(.95)}
 </style>

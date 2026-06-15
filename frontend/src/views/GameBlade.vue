@@ -85,6 +85,7 @@
         <div class="overlay-score">得分：{{ score }}</div>
         <div class="overlay-bonus" v-if="levelBonus">关卡奖励：+{{ levelBonus }}分</div>
         <button class="overlay-btn" @click="nextLevel">下一关</button>
+        <button class="overlay-btn secondary" @click="goBack">返回首页</button>
       </div>
     </div>
 
@@ -94,6 +95,7 @@
         <div class="overlay-score">最终得分：{{ score }}</div>
         <div class="overlay-level">到达关卡：第 {{ level }} 关</div>
         <button class="overlay-btn" @click="resetGame">重新开始</button>
+        <button class="overlay-btn secondary" @click="goBack">返回首页</button>
       </div>
     </div>
 
@@ -102,6 +104,7 @@
         <div class="overlay-title">⚔️ 转刀割草</div>
         <div class="overlay-desc">拖动控制移动，用旋转的刀消灭敌人！<br/>收集道具增强实力，击败BOSS通过关卡。</div>
         <button class="overlay-btn start" @click="startGame">开始游戏</button>
+        <button class="overlay-btn secondary" @click="goBack">返回首页</button>
       </div>
     </div>
 
@@ -376,6 +379,14 @@ function updateCamera() {
   cameraY = player.y - canvasHeight.value / 2
   cameraX = Math.max(0, Math.min(mapWidth - canvasWidth.value, cameraX))
   cameraY = Math.max(0, Math.min(mapHeight - canvasHeight.value, cameraY))
+}
+
+function isInView(x, y, radius) {
+  const margin = radius + 50
+  return x + margin > cameraX && 
+         x - margin < cameraX + canvasWidth.value && 
+         y + margin > cameraY && 
+         y - margin < cameraY + canvasHeight.value
 }
 
 function generateMap() {
@@ -1310,7 +1321,6 @@ function draw() {
     if (screenShake < 0.5) screenShake = 0
   }
 
-  updateCamera()
   ctx.translate(-cameraX, -cameraY)
 
   drawBackground()
@@ -1367,19 +1377,21 @@ function drawBackground() {
 
 function drawGrass() {
   const theme = currentTheme.value
+  ctx.save()
+  ctx.globalAlpha = theme.groundAlpha
+  ctx.fillStyle = theme.groundColor
   for (const grass of grassPatches) {
-    ctx.save()
-    ctx.globalAlpha = theme.groundAlpha
-    ctx.fillStyle = theme.groundColor
+    if (!isInView(grass.x, grass.y, grass.size)) continue
     ctx.beginPath()
     ctx.arc(grass.x, grass.y, grass.size, 0, Math.PI * 2)
     ctx.fill()
-    ctx.restore()
   }
+  ctx.restore()
 }
 
 function drawHazards() {
   for (const h of hazards) {
+    if (!isInView(h.x, h.y, h.radius)) continue
     ctx.save()
     const pulseScale = 1 + Math.sin(h.pulse) * 0.1
     const r = h.radius * pulseScale
@@ -1448,6 +1460,7 @@ function drawHazards() {
 
 function drawObstacles() {
   for (const obs of obstacles) {
+    if (!isInView(obs.x, obs.y, obs.radius * 1.5)) continue
     ctx.save()
     ctx.shadowColor = 'rgba(0,0,0,0.3)'
     ctx.shadowBlur = 8
@@ -1626,6 +1639,7 @@ function drawObstacles() {
 
 function drawChests() {
   for (const chest of chests) {
+    if (!isInView(chest.x, chest.y, chest.radius * 2)) continue
     chest.pulse = (chest.pulse + 0.03) % (Math.PI * 2)
 
     ctx.save()
@@ -1680,6 +1694,7 @@ function drawChests() {
 function drawEnvParticles() {
   const theme = currentTheme.value
   for (const p of envParticles) {
+    if (!isInView(p.x, p.y, p.radius * 2)) continue
     ctx.save()
     ctx.globalAlpha = p.life * 0.6
 
@@ -1710,6 +1725,7 @@ function drawEnvParticles() {
 
 function drawTrailParticles() {
   for (const p of trailParticles) {
+    if (!isInView(p.x, p.y, p.radius)) continue
     ctx.save()
     ctx.globalAlpha = p.life * 0.5
     ctx.fillStyle = p.color
@@ -1722,13 +1738,14 @@ function drawTrailParticles() {
 
 function drawPowerups() {
   for (const p of powerups) {
+    if (!isInView(p.x, p.y, p.radius * 2)) continue
     p.pulse = (p.pulse + 0.08) % (Math.PI * 2)
     const info = getPowerupInfo(p.type)
     const scale = 1 + Math.sin(p.pulse) * 0.15
 
     ctx.save()
     ctx.shadowColor = info.color
-    ctx.shadowBlur = 12
+    ctx.shadowBlur = 10
 
     const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius * scale)
     gradient.addColorStop(0, '#fff')
@@ -1752,6 +1769,7 @@ function drawPowerups() {
 
 function drawParticles() {
   for (const p of particles) {
+    if (!isInView(p.x, p.y, p.radius)) continue
     ctx.save()
     ctx.globalAlpha = p.life
     ctx.fillStyle = p.color
@@ -1764,6 +1782,7 @@ function drawParticles() {
 
 function drawDamageTexts() {
   for (const t of damageTexts) {
+    if (!isInView(t.x, t.y, 20)) continue
     ctx.save()
     ctx.globalAlpha = t.life
     ctx.fillStyle = t.color
@@ -1786,7 +1805,7 @@ function drawPlayer() {
   }
 
   ctx.shadowColor = '#60a5fa'
-  ctx.shadowBlur = 20
+  ctx.shadowBlur = 12
 
   const gradient = ctx.createRadialGradient(
     player.x, player.y, 0,
@@ -1833,7 +1852,7 @@ function drawBlades() {
 
     ctx.save()
     ctx.shadowColor = '#f472b6'
-    ctx.shadowBlur = 15
+    ctx.shadowBlur = 10
 
     ctx.strokeStyle = '#ec4899'
     ctx.lineWidth = bladeWidth
@@ -1859,6 +1878,7 @@ function drawBlades() {
 
 function drawEnemies() {
   for (const enemy of enemies) {
+    if (!isInView(enemy.x, enemy.y, enemy.radius)) continue
     ctx.save()
 
     if (enemy.type === 'ghost' && enemy.phased) {
@@ -1866,7 +1886,7 @@ function drawEnemies() {
     }
 
     ctx.shadowColor = enemy.color
-    ctx.shadowBlur = 8
+    ctx.shadowBlur = 6
 
     if (enemy.type === 'frost') {
       const gradient = ctx.createRadialGradient(enemy.x, enemy.y, 0, enemy.x, enemy.y, enemy.radius)
@@ -2600,6 +2620,14 @@ onUnmounted(() => {
 .overlay-btn.start {
   background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
   box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+}
+
+.overlay-btn.secondary {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  box-shadow: none;
+  margin-top: 10px;
 }
 
 .overlay-btn:active {

@@ -28,9 +28,23 @@
       ></canvas>
     </div>
 
-    <div class="game-status" v-if="gameOver">
-      <div class="status-text">游戏结束！</div>
-      <div class="status-score">最终得分: {{ score }}</div>
+    <div class="game-overlay" v-if="showStartScreen">
+      <div class="overlay-content">
+        <div class="overlay-title">2️⃣0️⃣4️⃣8️⃣</div>
+        <div class="overlay-desc">滑动或使用方向键移动数字方块<br/>相同数字的方块碰撞会合并<br/>合并出 2048 即可获胜！</div>
+        <button class="overlay-btn start" @click="startGame">开始游戏</button>
+        <button class="overlay-btn secondary" @click="goBack">返回首页</button>
+      </div>
+    </div>
+
+    <div class="game-overlay" v-if="gameOver">
+      <div class="overlay-content">
+        <div class="overlay-title gameover">💀 游戏结束</div>
+        <div class="overlay-score">最终得分：{{ score }}</div>
+        <div class="overlay-level">最高分：{{ highScore }}</div>
+        <button class="overlay-btn" @click="newGame">重新开始</button>
+        <button class="overlay-btn secondary" @click="goBack">返回首页</button>
+      </div>
     </div>
 
     <div class="direction-buttons">
@@ -78,6 +92,7 @@ const CELL_PADDING = 8
 const canvasSize = ref(300)
 const score = ref(0)
 const gameOver = ref(false)
+const showStartScreen = ref(true)
 
 const highScore = computed(() => highScores['2048'] || 0)
 
@@ -541,6 +556,11 @@ async function handleGameOver() {
   }
 }
 
+function startGame() {
+  showStartScreen.value = false
+  newGame()
+}
+
 function newGame() {
   score.value = 0
   gameOver.value = false
@@ -600,7 +620,8 @@ onMounted(() => {
   loadHighScores()
   nextTick(() => {
     resizeCanvas()
-    newGame()
+    initGrid()
+    draw()
   })
 
   swipeHandler = useSwipe(pageRef.value, {
@@ -767,5 +788,93 @@ onUnmounted(() => {
 
 .center-btn:active {
   background: rgba(255, 255, 255, 0.5);
+}
+
+.game-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(5px);
+}
+
+.overlay-content {
+  background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  padding: 32px 28px;
+  text-align: center;
+  color: white;
+  max-width: 320px;
+  width: 85%;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.overlay-title {
+  font-size: 28px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  letter-spacing: 1px;
+}
+
+.overlay-title.gameover {
+  color: #ff6b6b;
+}
+
+.overlay-desc {
+  font-size: 14px;
+  opacity: 0.9;
+  margin-bottom: 20px;
+  line-height: 1.8;
+}
+
+.overlay-score {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.overlay-level {
+  font-size: 14px;
+  opacity: 0.85;
+  margin-bottom: 20px;
+}
+
+.overlay-btn {
+  width: 100%;
+  padding: 14px 24px;
+  border-radius: 14px;
+  border: none;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(251, 191, 36, 0.4);
+}
+
+.overlay-btn.start {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+}
+
+.overlay-btn.secondary {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: white;
+  box-shadow: none;
+  margin-top: 10px;
+}
+
+.overlay-btn:active {
+  transform: scale(0.95);
 }
 </style>

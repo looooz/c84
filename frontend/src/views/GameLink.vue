@@ -73,6 +73,7 @@
         <div class="overlay-score">得分：{{ score }}</div>
         <div class="overlay-bonus">关卡奖励：+{{ levelBonus }}分</div>
         <button class="overlay-btn" @click="nextLevel">下一关</button>
+        <button class="overlay-btn secondary" @click="goBack">返回首页</button>
       </div>
     </div>
 
@@ -89,6 +90,7 @@
         <div class="overlay-score">最终得分：{{ score }}</div>
         <div class="overlay-level">到达关卡：第 {{ level }} 关</div>
         <button class="overlay-btn" @click="resetGame">重新开始</button>
+        <button class="overlay-btn secondary" @click="goBack">返回首页</button>
       </div>
     </div>
 
@@ -97,6 +99,7 @@
         <div class="overlay-title">🎴 连连看</div>
         <div class="overlay-desc">点击两个相同图案，若它们之间能用不超过两个拐点的直线连通，即可消除。<br/><br/>消除所有方块进入下一关！</div>
         <button class="overlay-btn start" @click="startGame">开始游戏</button>
+        <button class="overlay-btn secondary" @click="goBack">返回首页</button>
       </div>
     </div>
 
@@ -268,8 +271,18 @@ function getLevelConfig(lvl) {
   const baseRows = 6
   const colIncrement = Math.floor((lvl - 1) / 3)
   const rowIncrement = Math.floor((lvl - 1) / 2)
-  const newCols = Math.min(baseCols + colIncrement, 10)
-  const newRows = Math.min(baseRows + rowIncrement, 12)
+  let newCols = Math.min(baseCols + colIncrement, 10)
+  let newRows = Math.min(baseRows + rowIncrement, 12)
+  
+  if ((newCols * newRows) % 2 !== 0) {
+    if (newRows > newCols && newRows > 6) {
+      newRows--
+    } else if (newCols > 6) {
+      newCols--
+    } else {
+      newRows++
+    }
+  }
   
   const patternTypes = Math.min(6 + lvl, 32)
   const time = lvl >= 1 ? Math.max(40, 120 - (lvl - 1) * 8) : 0
@@ -1292,6 +1305,14 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
   box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
   color: white;
+}
+
+.overlay-btn.secondary {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: white;
+  box-shadow: none;
+  margin-top: 10px;
 }
 
 .overlay-btn:active {
