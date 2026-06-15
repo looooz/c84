@@ -31,7 +31,7 @@ function initDatabase() {
       console.error('创建表失败:', err.message);
     } else {
       console.log('high_scores 表已就绪');
-      const games = ['2048', 'snake', 'tetris', 'bigfish', 'blade', 'tank'];
+      const games = ['2048', 'snake', 'tetris', 'bigfish', 'blade', 'tank', 'link'];
       games.forEach(game => {
         db.get('SELECT * FROM high_scores WHERE game_name = ?', [game], (err, row) => {
           if (!row) {
@@ -51,7 +51,7 @@ app.get('/api/scores', (req, res) => {
       return;
     }
     const scores = {};
-    const allGames = ['2048', 'snake', 'tetris', 'bigfish', 'blade', 'tank'];
+    const allGames = ['2048', 'snake', 'tetris', 'bigfish', 'blade', 'tank', 'link'];
     allGames.forEach(game => {
       scores[game] = { score: 0, playerName: '玩家', updatedAt: null };
     });

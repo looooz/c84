@@ -52,6 +52,12 @@ const routes = [
     name: 'GameTank',
     component: () => import('../views/GameTank.vue'),
     meta: { title: '坦克大战' }
+  },
+  {
+    path: '/game/link',
+    name: 'GameLink',
+    component: () => import('../views/GameLink.vue'),
+    meta: { title: '连连看' }
   }
 ]
 

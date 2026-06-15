@@ -79,7 +79,7 @@ const highScores = inject('highScores')
 const loadHighScores = inject('loadHighScores')
 const refreshHighScores = inject('refreshHighScores')
 
-const ALL_GAMES_KEY = ['2048', 'snake', 'tetris', 'bigfish', 'blade', 'tank']
+const ALL_GAMES_KEY = ['2048', 'snake', 'tetris', 'bigfish', 'blade', 'tank', 'link']
 
 function getHighScore(key) {
   if (typeof highScores !== 'object' || highScores === null) return 0
@@ -135,6 +135,13 @@ const GAMES_DEF = [
     icon: '🎮',
     iconBg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
     route: '/game/tank'
+  },
+  {
+    key: 'link',
+    name: '连连看',
+    icon: '🎴',
+    iconBg: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)',
+    route: '/game/link'
   }
 ]
 

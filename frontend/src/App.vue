@@ -22,7 +22,7 @@ const celebrateVisible = ref(false)
 const celebrateScore = ref(0)
 const celebrateGameName = ref('')
 
-const ALL_GAMES = ['2048', 'snake', 'tetris', 'bigfish', 'blade', 'tank']
+const ALL_GAMES = ['2048', 'snake', 'tetris', 'bigfish', 'blade', 'tank', 'link']
 const STORAGE_KEY = 'mini_game_highscores_v1'
 
 const highScores = reactive({
@@ -31,7 +31,8 @@ const highScores = reactive({
   'tetris': 0,
   'bigfish': 0,
   'blade': 0,
-  'tank': 0
+  'tank': 0,
+  'link': 0
 })
 
 function readFromStorage() {
@@ -165,7 +166,8 @@ function showCelebrate(score, gameName) {
     'tetris': '俄罗斯方块',
     'bigfish': '大鱼吃小鱼',
     'blade': '转刀割草',
-    'tank': '坦克大战'
+    'tank': '坦克大战',
+    'link': '连连看'
   }
   celebrateScore.value = score
   celebrateGameName.value = gameNames[gameName] || gameName
